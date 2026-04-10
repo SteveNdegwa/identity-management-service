@@ -13,6 +13,7 @@ class AuditEventType(models.TextChoices):
     MFA_ENROLLED = "auth.mfa.enrolled"
     MFA_VERIFIED = "auth.mfa.verified"
     MFA_FAILED = "auth.mfa.failed"
+    MFA_REQUIRED = "auth.mfa.required"
     MFA_ENROLLMENT_REQUIRED = "auth.mfa.enrollment_required"
     MFA_ENROLLMENT_COMPLETE = "auth.mfa.enrollment_complete"
     MFA_METHOD_SUSPENDED = "auth.mfa.method_suspended"
@@ -46,6 +47,7 @@ class AuditEventType(models.TextChoices):
     SYSTEM_USER_INVITED = "system_user.invited"
     USER_SUSPENDED = "user.suspended"
     USER_RESTORED = "user.restored"
+    USER_LINKED_TO_SYSTEM = "user.linked_to_system"
 
     # Organization
     ORG_CREATED = "org.created"
@@ -53,6 +55,8 @@ class AuditEventType(models.TextChoices):
     ORG_SETTINGS_CHANGED = "org.settings.changed"
     MEMBER_ADDED = "org.member.added"
     MEMBER_REMOVED = "org.member.removed"
+    MEMBER_SUSPENDED = "org.member.suspended"
+    MEMBER_UNSUSPENDED = "org.member.unsuspended"
     MEMBER_ROLE_CHANGED = "org.member.role_changed"
     MEMBER_BRANCH_CHANGED = "org.member.branch_changed"
     BRANCH_CREATED = "org.branch.created"

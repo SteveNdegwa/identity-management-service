@@ -5,7 +5,6 @@ from django.db import transaction
 from apps.accounts.models import User, SystemUser
 from apps.audit.models import AuditEventType, AuditLog
 from apps.base.models import Country
-from apps.organizations.models import OrganizationMembership
 from apps.permissions.models import Role, Permission, RolePermission, UserPermissionOverride
 from apps.systems.models import System
 

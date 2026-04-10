@@ -46,6 +46,7 @@ from apps.accounts.models import (
     UserIdentifier, IdentifierType,
 )
 from apps.audit.models import AuditLog, AuditEventType
+from apps.sso.models import SSOSession
 
 BACKUP_CODE_COUNT = 10
 OTP_TTL_SECONDS   = 300   # 5 minutes
@@ -58,13 +59,9 @@ class MFAError(Exception):
 
 class MFAService:
 
-    # =========================================================================
-    # Initiate MFA challenge (SMS / Email)
-    # =========================================================================
-
     def initiate_mfa(
         self,
-        session: "SSOSession",
+        session: SSOSession,
         method: str,
         ip_address: str = "",
     ) -> dict:

@@ -1,5 +1,4 @@
 import uuid
-
 from django.db import models
 from django.utils import timezone
 
@@ -20,7 +19,6 @@ class SoftDeleteManager(models.Manager):
 
 class SoftDeleteModel(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
-
     objects = SoftDeleteManager()
     all_objects = models.Manager()
 
@@ -50,3 +48,15 @@ class Country(BaseModel):
 
     def __str__(self):
         return f"{self.code} – {self.name}"
+
+
+class Realm(BaseModel):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "base_realm"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name

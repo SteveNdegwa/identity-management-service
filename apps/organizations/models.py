@@ -1,5 +1,4 @@
 from django.db import models
-from django.utils import timezone
 
 from apps.base.models import BaseModel
 
@@ -90,86 +89,6 @@ class Branch(BaseModel):
 
     def __str__(self):
         return f"{self.name} ({self.organization.name}, {self.country.code})"
-
-
-class OrganizationMembership(BaseModel):
-    system_user  = models.ForeignKey(
-        "accounts.SystemUser",
-        on_delete=models.CASCADE,
-        related_name="org_memberships"
-    )
-    organization = models.ForeignKey(
-        Organization,
-        on_delete=models.CASCADE,
-        related_name="memberships"
-    )
-    country = models.ForeignKey(
-        "base.Country",
-        on_delete=models.PROTECT,
-        related_name="org_memberships"
-    )
-    role = models.ForeignKey(
-        "permissions.Role",
-        on_delete=models.PROTECT,
-        related_name="org_memberships"
-    )
-
-    all_branches = models.BooleanField(default=True)
-    branch_access = models.ManyToManyField(
-        Branch,
-        through="MembershipBranchAccess",
-        blank=True,
-        related_name="memberships",
-    )
-
-    joined_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-
-    invited_by = models.ForeignKey(
-        "accounts.SystemUser",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="sent_invitations",
-    )
-    invite_accepted_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "organizations_membership"
-        unique_together = [("system_user", "organization", "country")]
-        indexes = [
-            models.Index(fields=["organization", "country", "role"]),
-            models.Index(fields=["system_user", "is_active"]),
-        ]
-
-    def __str__(self):
-        return (
-            f"{self.system_user} → {self.organization.name} "
-            f"[{self.country.code}] as {self.role}"
-        )
-
-    def is_expired(self):
-        return self.expires_at is not None and self.expires_at < timezone.now()
-
-
-class MembershipBranchAccess(BaseModel):
-    membership = models.ForeignKey(
-        OrganizationMembership,
-        on_delete=models.CASCADE,
-        related_name="branch_grants"
-    )
-    branch = models.ForeignKey(Branch, on_delete=models.CASCADE)
-    granted_by = models.ForeignKey(
-        "accounts.SystemUser",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-    )
-
-    class Meta:
-        db_table = "organizations_membership_branch"
-        unique_together = [("membership", "branch")]
 
 
 class OrganizationSettings(BaseModel):

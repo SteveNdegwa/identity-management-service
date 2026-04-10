@@ -1,17 +1,18 @@
 from typing import Optional
-from django.db import transaction
-from django.utils import timezone
 
-from apps.accounts.models import SystemUser
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
+from apps.accounts.models import SystemUser, SystemUserStatus
 from apps.base.models import Country
 from apps.organizations.models import (
     Organization,
     Branch,
-    OrganizationMembership,
-    MembershipBranchAccess,
-    OrganizationSettings, OrganizationCountry,
+    OrganizationSettings,
+    OrganizationCountry,
 )
 from apps.permissions.models import Role
+from apps.permissions.services.permission_resolver import PermissionResolverService
 from apps.systems.models import System, SystemSettings
 from apps.audit.models import AuditLog, AuditEventType
 
@@ -77,11 +78,11 @@ class OrganizationService:
 
     @transaction.atomic
     def activate_in_country(
-        self,
-        org: Organization,
-        country: Country,
-        registration_number: str = "",
-        tax_id: str = "",
+            self,
+            org: Organization,
+            country: Country,
+            registration_number: str = "",
+            tax_id: str = "",
     ) -> OrganizationCountry:
         if not org.system.available_countries.filter(id=country.id).exists():
             raise ValueError(
@@ -98,14 +99,14 @@ class OrganizationService:
         return oc
 
     def set_setting(
-        self,
-        org: Organization,
-        key: str,
-        value: str,
-        value_type: str = "string",
-        updated_by: Optional[SystemUser] = None,
-        is_secret: bool = False,
-        description: str = "",
+            self,
+            org: Organization,
+            key: str,
+            value: str,
+            value_type: str = "string",
+            updated_by: Optional[SystemUser] = None,
+            is_secret: bool = False,
+            description: str = "",
     ) -> OrganizationSettings:
         setting, _ = OrganizationSettings.objects.update_or_create(
             organization=org,
@@ -146,14 +147,14 @@ class OrganizationService:
 
     @transaction.atomic
     def create_branch(
-        self,
-        org: Organization,
-        country: Country,
-        name: str,
-        code: str = "",
-        parent: Optional[Branch] = None,
-        address: str = "",
-        metadata: dict = None,
+            self,
+            org: Organization,
+            country: Country,
+            name: str,
+            code: str = "",
+            parent: Optional[Branch] = None,
+            address: str = "",
+            metadata: dict = None,
     ) -> Branch:
         if not org.countries.filter(id=country.id).exists():
             raise ValueError(
@@ -182,8 +183,8 @@ class OrganizationService:
         **fields,
     ) -> Branch:
         allowed = {
-            "name", "code", "address", "is_active", "metadata",
-            "parent", "latitude", "longitude"
+            "name", "code", "address", "is_active",
+            "metadata", "parent"
         }
         updated = []
         for key, value in fields.items():
@@ -201,131 +202,106 @@ class OrganizationService:
         return branch
 
     @transaction.atomic
-    def add_member(
-        self,
-        system_user: SystemUser,
-        org: Organization,
-        country: Country,
-        role: Role,
-        invited_by: Optional[SystemUser] = None,
-        all_branches: bool = True,
-        branch_ids: Optional[list] = None,
-        expires_at=None,
-    ) -> OrganizationMembership:
-        if system_user.system_id != org.system_id:
-            raise ValueError(
-                "SystemUser and Organization must belong to the same System."
-            )
-        if role.system_id != org.system_id:
-            raise ValueError(
-                "Role must belong to the same System as the Organization."
-            )
-        if not org.countries.filter(id=country.id).exists():
-            raise ValueError(
-                f"{org.name} is not active in {country.name}."
-            )
-
-        membership, created = OrganizationMembership.objects.get_or_create(
-            system_user=system_user,
-            organization=org,
-            country=country,
-            defaults={
-                "role": role,
-                "invited_by": invited_by,
-                "all_branches": all_branches,
-                "expires_at": expires_at,
-                "is_active": True,
-                "invite_accepted_at": timezone.now(),
-            },
-        )
-
-        if not created:
-            membership.role = role
-            membership.is_active = True
-            membership.expires_at = expires_at
-            membership.all_branches = all_branches
-            membership.save(update_fields=[
-                "role",
-                "is_active",
-                "expires_at",
-                "all_branches"
-            ])
-
-        if not all_branches and branch_ids:
-            MembershipBranchAccess.objects.filter(membership=membership).delete()
-            for bid in branch_ids:
-                MembershipBranchAccess.objects.get_or_create(
-                    membership=membership,
-                    branch_id=bid,
-                    defaults={"granted_by": invited_by},
-                )
-
-        self._invalidate_perm_cache(system_user, org, country)
-        self._audit(
-            AuditEventType.MEMBER_ADDED,
-            actor=invited_by,
-            subject=system_user,
-            payload={
-                "org": org.name,
-                "country": country.code,
-                "role": role.name,
-                "all_branches": all_branches,
-            },
-        )
-        return membership
-
-    @transaction.atomic
     def change_member_role(
-        self,
-        membership: OrganizationMembership,
-        new_role: Role,
-        changed_by: Optional[SystemUser] = None,
-        reason: str = "",
-    ) -> OrganizationMembership:
-        if new_role.system_id != membership.organization.system_id:
-            raise ValueError("New role must belong to the same system.")
+            self,
+            member: SystemUser,
+            new_role: Role,
+            changed_by: Optional[SystemUser] = None,
+            reason: str = "",
+    ) -> SystemUser:
+        if new_role.system_id != member.organization.system_id:
+            raise ValidationError("New role must belong to the same system.")
 
-        old_role_name = membership.role.name
-        membership.role = new_role
-        membership.save(update_fields=["role"])
+        old_role_name = member.role.name
+        member.role = new_role
+        member.save(update_fields=["role"])
 
-        self._invalidate_perm_cache(
-            membership.system_user, membership.organization, membership.country
-        )
+        self._invalidate_perm_cache(member)
         self._audit(
             AuditEventType.MEMBER_ROLE_CHANGED,
             actor=changed_by,
-            subject=membership.system_user,
+            subject=member,
             payload={
                 "old_role": old_role_name,
                 "new_role": new_role.name,
-                "org": membership.organization.name,
-                "country": membership.country.code,
+                "org": member.organization.name,
+                "country": member.country.code,
                 "reason": reason,
             },
         )
-        return membership
+
+        return member
+
+    @transaction.atomic
+    def suspend_member(
+            self,
+            member: SystemUser,
+            suspended_by: Optional[SystemUser] = None,
+            reason: str = "",
+    ) -> None:
+        if member.status != SystemUserStatus.ACTIVE:
+            raise ValidationError("Member must have status ACTIVE.")
+
+        member.status = SystemUserStatus.SUSPENDED
+        member.save(update_fields=["status"])
+
+        self._invalidate_perm_cache(member)
+        self._audit(
+            AuditEventType.MEMBER_SUSPENDED,
+            actor=suspended_by,
+            subject=member,
+            payload={
+                "org": member.organization.name,
+                "country": member.country.code,
+                "reason": reason,
+            },
+        )
+
+    @transaction.atomic
+    def unsuspend_member(
+            self,
+            member: SystemUser,
+            unsuspended_by: Optional[SystemUser] = None,
+            reason: str = "",
+    ) -> None:
+        if member.status != SystemUserStatus.SUSPENDED:
+            raise ValidationError("Member must have status SUSPENDED.")
+
+        member.status = SystemUserStatus.ACTIVE
+        member.save(update_fields=["status"])
+
+        self._audit(
+            AuditEventType.MEMBER_UNSUSPENDED,
+            actor=unsuspended_by,
+            subject=member,
+            payload={
+                "org": member.organization.name,
+                "country": member.country.code,
+                "reason": reason,
+            },
+        )
 
     @transaction.atomic
     def remove_member(
         self,
-        membership: OrganizationMembership,
+        member: SystemUser,
         removed_by: Optional[SystemUser] = None,
         reason: str = "",
     ) -> None:
-        membership.is_active = False
-        membership.save(update_fields=["is_active"])
+        if member.status == SystemUserStatus.REMOVED:
+            raise ValidationError("Member is already removed.")
 
-        self._invalidate_perm_cache(
-            membership.system_user, membership.organization, membership.country
-        )
+        member.status = SystemUserStatus.REMOVED
+        member.save(update_fields=["status"])
+
+        self._invalidate_perm_cache(member)
         self._audit(
             AuditEventType.MEMBER_REMOVED,
             actor=removed_by,
-            subject=membership.system_user,
+            subject=member,
             payload={
-                "org": membership.organization.name,
-                "country": membership.country.code,
+                "org": member.organization.name,
+                "country": member.country.code,
                 "reason": reason,
             },
         )
@@ -333,45 +309,36 @@ class OrganizationService:
     @transaction.atomic
     def set_branch_access(
         self,
-        membership: OrganizationMembership,
+        member: SystemUser,
         all_branches: bool,
-        branch_ids: Optional[list] = None,
+        branches: Optional[list[Branch]] = None,
         changed_by: Optional[SystemUser] = None,
-    ) -> OrganizationMembership:
-        membership.all_branches = all_branches
-        membership.save(update_fields=["all_branches"])
+    ) -> SystemUser:
+        member.all_branches = all_branches
+        member.save(update_fields=["all_branches"])
 
-        MembershipBranchAccess.objects.filter(membership=membership).delete()
-        if not all_branches and branch_ids:
-            for bid in branch_ids:
-                MembershipBranchAccess.objects.get_or_create(
-                    membership=membership,
-                    branch_id=bid,
-                    defaults={"granted_by": changed_by},
-                )
+        member.branch_access.delete()
+        if not all_branches and branches:
+            member.branch_access.set(branches)
 
-        self._invalidate_perm_cache(
-            membership.system_user, membership.organization, membership.country
-        )
+        self._invalidate_perm_cache(member)
         self._audit(
             AuditEventType.MEMBER_BRANCH_CHANGED,
             actor=changed_by,
-            subject=membership.system_user,
+            subject=member,
             payload={
                 "all_branches": all_branches,
-                "branch_ids": branch_ids or [],
+                "branch_ids": [branch.id for branch in branches] if branches else [],
             },
         )
-        return membership
+
+        return member
 
     @staticmethod
-    def _invalidate_perm_cache(system_user: SystemUser, org: Organization, country: Country):
+    def _invalidate_perm_cache(system_user: SystemUser):
         # noinspection PyBroadException
         try:
-            from apps.permissions.services.permission_resolver import PermissionResolverService
-            PermissionResolverService().invalidate_cache(
-                str(system_user.id), str(org.id), country.code
-            )
+            PermissionResolverService().invalidate_cache(str(system_user.id))
         except Exception:
             pass
 

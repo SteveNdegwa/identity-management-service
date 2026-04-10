@@ -1,58 +1,89 @@
+import bcrypt
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from apps.base.models import BaseModel, SoftDeleteModel
+from apps.accounts.identifier_utils import detect_identifier_type, IdentifierNormaliser
+from apps.base.models import BaseModel, SoftDeleteModel, Realm
 
 
 class UserManager(BaseUserManager):
     def create_user(
-        self,
-        password=None,
-        email=None,
-        phone_number=None,
-        username=None,
-        primary_country=None,
-        added_by_system=None,
-        **extra_fields,
+            self,
+            realm=None,
+            password=None,
+            pin=None,
+            email=None,
+            phone_number=None,
+            username=None,
+            national_id=None,
+            primary_country=None,
+            added_by_system=None,
+            **extra_fields,
     ):
+        if not realm:
+            raise ValueError("Realm is required when creating a user")
         if not any([email, phone_number, username]):
             raise ValueError("At least one identifier (email, phone, username) is required")
 
-        user = self.model(primary_country=primary_country, **extra_fields)
+        user = self.model(
+            realm=realm,
+            primary_country=primary_country,
+            **extra_fields
+        )
+
         if password:
             user.set_password(password)
         else:
             user.set_unusable_password()
+
+        if pin:
+            user.set_pin(pin)
+
         user.save(using=self._db)
 
+        # Create identifiers
         from apps.accounts.identifier_utils import IdentifierNormaliser
-
         if email:
             UserIdentifier.objects.create(
                 user=user,
+                realm=realm,
                 identifier_type=IdentifierType.EMAIL,
                 value=email,
                 value_normalised=IdentifierNormaliser.normalise(email, IdentifierType.EMAIL),
-                is_primary=(not phone_number and not username),
+                is_primary=True,
                 added_by_system=added_by_system,
             )
         if phone_number:
             UserIdentifier.objects.create(
                 user=user,
+                realm=realm,
                 identifier_type=IdentifierType.PHONE,
                 value=phone_number,
                 value_normalised=IdentifierNormaliser.normalise(phone_number, IdentifierType.PHONE),
-                is_primary=(not email and not username),
+                is_primary=False,
                 added_by_system=added_by_system,
             )
         if username:
             UserIdentifier.objects.create(
                 user=user,
+                realm=realm,
                 identifier_type=IdentifierType.USERNAME,
                 value=username,
-                value_normalised=username.lower().strip(),
-                is_primary=(not email and not phone_number),
+                value_normalised=IdentifierNormaliser.normalise(username, IdentifierType.USERNAME),
+                is_primary=False,
+                added_by_system=added_by_system,
+            )
+
+        if national_id:
+            UserIdentifier.objects.create(
+                user=user,
+                realm=realm,
+                identifier_type=IdentifierType.NATIONAL_ID,
+                value=national_id,
+                value_normalised=IdentifierNormaliser.normalise(national_id, IdentifierType.NATIONAL_ID),
+                is_primary=False,
                 added_by_system=added_by_system,
             )
         return user
@@ -60,17 +91,30 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
-        return self.create_user(email=email, password=password, **extra_fields)
+        extra_fields.setdefault("is_active", True)
+
+        admin_realm = Realm.objects.get_or_create(
+            name="admin",
+            defaults={"description": "Realm for super administrators"}
+        )[0]
+
+        return self.create_user(
+            realm=admin_realm,
+            email=email,
+            password=password,
+            **extra_fields
+        )
 
     @staticmethod
-    def get_by_identifier(value: str, identifier_type: str = None) -> "User":
-        from apps.accounts.identifier_utils import IdentifierNormaliser, detect_identifier_type
+    def get_by_identifier(value: str, identifier_type: str = None, realm: Realm = None) -> "User":
         detected = identifier_type or detect_identifier_type(value)
         normalised = IdentifierNormaliser.normalise(value, detected)
 
         qs = UserIdentifier.objects.filter(value_normalised=normalised)
         if identifier_type:
             qs = qs.filter(identifier_type=identifier_type)
+        if realm:
+            qs = qs.filter(realm=realm)
 
         row = qs.select_related("user").first()
         if not row:
@@ -79,23 +123,29 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
+    realm = models.ForeignKey(
+        Realm,
+        on_delete=models.PROTECT,
+        related_name="users",
+        editable=False
+    )
+
     primary_country = models.ForeignKey(
         "core.Country",
         null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name="primary_users",
     )
-
+    pin = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
-
     failed_login_attempts = models.PositiveSmallIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
 
-    USERNAME_FIELD  = "id"
+    USERNAME_FIELD = "id"
     REQUIRED_FIELDS = []
 
     class Meta:
@@ -105,19 +155,34 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
         primary = self.identifiers.filter(is_primary=True).first()
         return primary.value if primary else str(self.id)
 
+    def save(self, *args, **kwargs):
+        if self.pk:  # Existing user
+            old = User.objects.get(pk=self.pk)
+            if old.realm_id != self.realm_id:
+                raise ValidationError("Cannot change realm directly. Use AccountService.migrate_user_to_new_realm()")
+        super().save(*args, **kwargs)
+
+    def set_pin(self, raw_pin: str):
+        self.pin = bcrypt.hashpw(raw_pin.encode(), bcrypt.gensalt()).decode()
+
+    def check_pin(self, raw_pin: str) -> bool:
+        if not self.pin:
+            return False
+        return bcrypt.checkpw(raw_pin.encode(), self.pin.encode())
+
     def is_locked(self):
         return self.locked_until is not None and self.locked_until > timezone.now()
 
     def get_email(self) -> str | None:
-        row = self.identifiers.filter(
-            identifier_type=IdentifierType.EMAIL
-        ).first()
+        row = self.identifiers.filter(identifier_type=IdentifierType.EMAIL).first()
         return row.value if row else None
 
     def get_phone(self) -> str | None:
-        row = self.identifiers.filter(
-            identifier_type=IdentifierType.PHONE
-        ).first()
+        row = self.identifiers.filter(identifier_type=IdentifierType.PHONE).first()
+        return row.value if row else None
+
+    def get_national_id(self) -> str | None:
+        row = self.identifiers.filter(identifier_type=IdentifierType.NATIONAL_ID).first()
         return row.value if row else None
 
     def get_primary_identifier(self) -> "UserIdentifier | None":
@@ -138,14 +203,14 @@ class ActiveIdentifierManager(models.Manager):
 
 class UserIdentifier(BaseModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="identifiers")
+    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, editable=False, related_name="identifiers")
+
     identifier_type = models.CharField(max_length=30, choices=IdentifierType.choices)
     value = models.CharField(max_length=255)
     value_normalised = models.CharField(max_length=255, db_index=True)
-
-    is_primary  = models.BooleanField(default=False)
+    is_primary = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
-
     added_by_system = models.ForeignKey(
         "systems.System",
         null=True,
@@ -153,7 +218,6 @@ class UserIdentifier(BaseModel):
         on_delete=models.SET_NULL,
         related_name="added_identifiers",
     )
-
     disassociated_at = models.DateTimeField(null=True, blank=True, db_index=True)
     disassociation_reason = models.CharField(
         max_length=30,
@@ -181,19 +245,30 @@ class UserIdentifier(BaseModel):
         db_table = "accounts_user_identifier"
         constraints = [
             models.UniqueConstraint(
-                fields=["identifier_type", "value_normalised"],
+                fields=["realm", "identifier_type", "value_normalised"],
                 condition=models.Q(disassociated_at__isnull=True),
-                name="unique_active_identifier",
+                name="unique_active_identifier_per_realm",
             )
         ]
         indexes = [
+            models.Index(fields=["realm", "identifier_type", "value_normalised"]),
             models.Index(fields=["user", "identifier_type"]),
-            models.Index(fields=["identifier_type", "value_normalised"]),
         ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:  # Existing identifier
+            old = UserIdentifier.objects.get(pk=self.pk)
+            if old.realm_id != self.realm_id:
+                raise ValidationError("Cannot change realm of an existing identifier")
+        else:
+            # New identifier - auto set realm from user
+            if self.user_id and not self.realm_id:
+                self.realm = self.user.realm
+        super().save(*args, **kwargs)
 
     def __str__(self):
         status = "active" if not self.disassociated_at else "disassociated"
-        return f"{self.identifier_type}:{self.value} ({status})"
+        return f"{self.identifier_type}:{self.value} ({status}) @ {self.realm.name}"
 
     @property
     def is_active(self):
@@ -205,82 +280,8 @@ class UserIdentifier(BaseModel):
         self.is_primary = False
         self.disassociated_by = disassociated_by
         self.save(update_fields=[
-            "disassociated_at",
-            "disassociation_reason",
-            "disassociated_by",
-            "is_primary",
+            "disassociated_at", "disassociation_reason", "disassociated_by", "is_primary"
         ])
-
-
-class MFAMethod(models.TextChoices):
-    TOTP = "totp", "Authenticator App (TOTP)"
-    SMS = "sms", "SMS OTP"
-    EMAIL = "email_otp", "Email OTP"
-    WEBAUTHN = "webauthn", "Hardware Key / Passkey (WebAuthn)"
-    BACKUP = "backup", "Backup Code"
-
-
-class UserMFA(BaseModel, SoftDeleteModel):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mfa_methods")
-    method = models.CharField(max_length=20, choices=MFAMethod.choices)
-    is_primary = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-
-    # Encrypted secret (TOTP) or public key (WebAuthn)
-    secret_encrypted = models.TextField(blank=True)
-
-    # WebAuthn: identifies the credential / authenticator device
-    credential_id = models.TextField(blank=True, db_index=True)
-
-    # SMS/Email: explicit override for delivery destination
-    # If blank, resolved at runtime from UserIdentifier
-    delivery_target = models.CharField(max_length=120, blank=True)
-
-    # Friendly name shown in "your enrolled devices" list
-    device_name = models.CharField(max_length=120, blank=True)
-
-    last_used_at = models.DateTimeField(null=True, blank=True)
-    verified_at  = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "accounts_user_mfa"
-        unique_together = [("user", "method", "credential_id")]
-
-    def __str__(self):
-        return f"{self.user} – {self.method} ({'primary' if self.is_primary else 'secondary'})"
-
-
-class BackupCode(BaseModel, SoftDeleteModel):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="backup_codes")
-    code_hash = models.CharField(max_length=128)
-    is_used = models.BooleanField(default=False, db_index=True)
-    used_at = models.DateTimeField(null=True, blank=True)
-    used_from_ip = models.GenericIPAddressField(null=True, blank=True)
-    invalidated_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "accounts_backup_code"
-
-
-class PendingMFAEnrollment(BaseModel, SoftDeleteModel):
-    session = models.OneToOneField(
-        "sso.SSOSession",
-        on_delete=models.CASCADE,
-        related_name="pending_mfa_enrollment"
-    )
-    required_by = models.CharField(max_length=255)
-    allowed_methods = models.JSONField(default=list)
-    context_system_user_id  = models.UUIDField(null=True, blank=True)
-    context_org_id = models.UUIDField(null=True, blank=True)
-    context_country_code = models.CharField(max_length=2, blank=True)
-    expires_at = models.DateTimeField()
-    completed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "accounts_pending_mfa_enrollment"
-
-    def is_expired(self):
-        return timezone.now() >= self.expires_at
 
 
 class Gender(models.TextChoices):
@@ -291,10 +292,11 @@ class Gender(models.TextChoices):
 
 
 class SystemUserStatus(models.TextChoices):
-    PENDING = "pending", "Pending — provisioned, awaiting claim"
-    INVITED = "invited", "Invited — email/SMS sent"
-    ACTIVE = "active", "Active — claimed and in use"
+    PENDING = "pending", "Pending"
+    INVITED = "invited", "Invited"
+    ACTIVE = "active", "Active"
     SUSPENDED = "suspended", "Suspended"
+    REMOVED = "removed", "Removed"
 
 
 class SystemUser(BaseModel, SoftDeleteModel):
@@ -304,28 +306,53 @@ class SystemUser(BaseModel, SoftDeleteModel):
         blank=True,
         on_delete=models.CASCADE,
         related_name="system_users",
+        db_index=True
     )
-    system  = models.ForeignKey(
+    system = models.ForeignKey(
         "systems.System",
         on_delete=models.CASCADE,
-        related_name="system_users"
+        related_name="system_users",
+        db_index=True
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="memberships",
+        db_index=True
     )
     country = models.ForeignKey(
-        "core.Country",
+        "base.Country",
         on_delete=models.PROTECT,
         related_name="system_users"
     )
-
+    role = models.ForeignKey(
+        "permissions.Role",
+        on_delete=models.PROTECT,
+        related_name="org_memberships"
+    )
+    all_branches = models.BooleanField(default=True)
+    branch_access = models.ManyToManyField(
+        "organizations.Branch",
+        blank=True,
+        related_name="memberships",
+    )
     status = models.CharField(
         max_length=20,
         choices=SystemUserStatus.choices,
         default=SystemUserStatus.PENDING,
         db_index=True,
     )
-
+    provisioned_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="user_system_provisions",
+        null=True,
+        blank=True
+    )
     # Invite flow
     provisioning_email = models.EmailField(blank=True, db_index=True)
-    provisioning_phone = models.CharField(max_length=30, blank=True)
+    provisioning_phone = models.CharField(max_length=30, blank=True, db_index=True)
+    provisioning_national_id = models.CharField(max_length=20, blank=True, db_index=True)
     claim_token_lookup_id = models.CharField(
         max_length=32,
         unique=True,
@@ -346,40 +373,34 @@ class SystemUser(BaseModel, SoftDeleteModel):
     gender = models.CharField(max_length=20, choices=Gender.choices, blank=True)
     profile_photo_url = models.URLField(blank=True)
 
-    # System-specific reference
     external_ref = models.CharField(max_length=120, blank=True, db_index=True)
 
-    # Suspension
-    is_suspended = models.BooleanField(default=False, db_index=True)
     suspended_reason = models.TextField(blank=True)
     suspended_at = models.DateTimeField(null=True, blank=True)
     suspended_by = models.ForeignKey(
-        User,
+        "self",
         null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name="suspended_system_users",
     )
 
-    # Activity
     registered_at = models.DateTimeField(auto_now_add=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
 
-    # Metadata for system-specific extras
     metadata = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "accounts_system_user"
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "system"],
-                condition=models.Q(user__isnull=False),
-                name="unique_claimed_system_user",
+                fields=["user", "system", "organization"],
+                condition=models.Q(status=SystemUserStatus.ACTIVE),
+                name="unique_user_per_system_org"
             )
         ]
         indexes = [
-            models.Index(fields=["system", "country"]),
-            models.Index(fields=["system", "status"]),
-            models.Index(fields=["system", "is_suspended"]),
+            models.Index(fields=["system", "country", "organization"]),
+            models.Index(fields=["user", "system", "status"]),
         ]
 
     def __str__(self):
@@ -389,9 +410,9 @@ class SystemUser(BaseModel, SoftDeleteModel):
     @property
     def is_claimable(self):
         return (
-            self.status == SystemUserStatus.INVITED
-            and self.claim_token_expires_at
-            and self.claim_token_expires_at > timezone.now()
+                self.status == SystemUserStatus.INVITED
+                and self.claim_token_expires_at
+                and self.claim_token_expires_at > timezone.now()
         )
 
     @property
@@ -404,15 +425,14 @@ class SocialAccount(BaseModel, SoftDeleteModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="social_accounts")
     provider = models.CharField(max_length=50)
     uid = models.CharField(max_length=255)
-
-    access_token  = models.TextField(blank=True)
+    access_token = models.TextField(blank=True)
     refresh_token = models.TextField(blank=True)
     token_expires_at = models.DateTimeField(null=True, blank=True)
     extra_data = models.JSONField(default=dict)
 
     class Meta:
         db_table = "accounts_social_account"
-        unique_together = [("provider", "uid")]
+        # unique_together = [("provider", "uid")]
 
     def __str__(self):
         return f"{self.provider}:{self.uid} → {self.user}"

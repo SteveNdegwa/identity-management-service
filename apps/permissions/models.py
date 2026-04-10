@@ -162,8 +162,6 @@ class UserPermissionOverride(BaseModel):
         on_delete=models.CASCADE,
         related_name="permission_overrides"
     )
-    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE)
-    country = models.ForeignKey("base.Country", on_delete=models.PROTECT)
     permission = models.ForeignKey(Permission, on_delete=models.CASCADE)
 
     effect = models.CharField(max_length=10, choices=Effect.choices)

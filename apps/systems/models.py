@@ -1,11 +1,22 @@
 import secrets
-
+from django.core.exceptions import ValidationError
 from django.db import models
-
-from apps.base.models import BaseModel
+from apps.base.models import BaseModel, Realm
 
 
 class System(BaseModel):
+    realm = models.ForeignKey(
+        Realm,
+        on_delete=models.PROTECT,
+        related_name="systems",
+        editable=False,
+        help_text="Realm determines SSO boundary and identifier uniqueness"
+    )
+
+    class PasswordType(models.TextChoices):
+        PASSWORD = "password", "Password"
+        PIN = "pin", "PIN"
+
     name = models.CharField(max_length=120, unique=True)
     slug = models.SlugField(max_length=80, unique=True)
     description = models.TextField(blank=True)
@@ -20,6 +31,11 @@ class System(BaseModel):
     required_identifier_types = models.JSONField(default=list)
     allowed_login_identifier_types = models.JSONField(default=list)
 
+    password_type = models.CharField(
+        max_length=10,
+        choices=PasswordType.choices,
+        default=PasswordType.PASSWORD
+    )
     allow_password_login = models.BooleanField(default=True)
     allow_passwordless_login = models.BooleanField(default=False)
     allow_magic_link_login = models.BooleanField(default=False)
@@ -27,7 +43,6 @@ class System(BaseModel):
     passwordless_only = models.BooleanField(default=False)
 
     allowed_social_providers = models.JSONField(default=list)
-
     registration_open = models.BooleanField(default=True)
     requires_approval = models.BooleanField(default=False)
 
@@ -42,9 +57,19 @@ class System(BaseModel):
 
     class Meta:
         db_table = "systems_system"
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            old = System.objects.get(pk=self.pk)
+            if old.realm_id != self.realm_id:
+                raise ValidationError(
+                    "System realm cannot be changed after creation."
+                )
+        super().save(*args, **kwargs)
 
     def get_effective_allowed_mfa_methods(self) -> list:
         return self.allowed_mfa_methods or []
@@ -72,22 +97,22 @@ class SystemClient(BaseModel):
         PUBLIC = "public", "Public (SPA / mobile)"
         M2M = "m2m", "Machine-to-Machine"
 
-    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name="clients")
+    system = models.ForeignKey(
+        System,
+        on_delete=models.CASCADE,
+        related_name="clients"
+    )
     name = models.CharField(max_length=120)
-
     client_id = models.CharField(max_length=80, unique=True, default=secrets.token_urlsafe)
     client_secret_hash = models.CharField(max_length=255, blank=True)
-
     client_type = models.CharField(
         max_length=30,
         choices=ClientType.choices,
         default=ClientType.CONFIDENTIAL,
     )
-
     redirect_uris = models.JSONField(default=list)
     logout_uris = models.JSONField(default=list)
     allowed_scopes = models.JSONField(default=list)
-
     access_token_ttl = models.PositiveIntegerField(default=0)
     refresh_token_ttl = models.PositiveIntegerField(default=0)
     id_token_ttl = models.PositiveIntegerField(default=0)
@@ -119,7 +144,7 @@ class SystemClient(BaseModel):
                 system.allowed_login_identifier_types,
             ),
             "allow_password_login": (
-                system.allow_password_login and not system.passwordless_only
+                    system.allow_password_login and not system.passwordless_only
             ),
             "allow_passwordless_login": resolve(
                 self.override_allow_passwordless_login,
@@ -137,20 +162,20 @@ class SystemClient(BaseModel):
                 self.override_allowed_social_providers,
                 system.allowed_social_providers,
             ),
-            "passwordless_only":   system.passwordless_only,
-            "registration_open":   system.registration_open,
-            "requires_approval":   system.requires_approval,
-            "mfa_required":        system.mfa_required,
+            "passwordless_only": system.passwordless_only,
+            "registration_open": system.registration_open,
+            "requires_approval": system.requires_approval,
+            "mfa_required": system.mfa_required,
             "allowed_mfa_methods": system.allowed_mfa_methods,
         }
 
 
 class SystemSettings(BaseModel):
     class ValueType(models.TextChoices):
-        STRING  = "string",  "String"
+        STRING = "string", "String"
         INTEGER = "integer", "Integer"
         BOOLEAN = "boolean", "Boolean"
-        JSON    = "json",    "JSON"
+        JSON = "json", "JSON"
 
     system = models.ForeignKey(System, on_delete=models.CASCADE, related_name="settings")
     key = models.CharField(max_length=120)
@@ -185,11 +210,8 @@ class SystemWebhook(BaseModel):
     system = models.ForeignKey(System, on_delete=models.CASCADE, related_name="webhooks")
     name = models.CharField(max_length=80)
     endpoint_url = models.URLField()
-
     secret_encrypted = models.TextField()
-
     event_types = models.JSONField(default=list)
-
     is_active = models.BooleanField(default=True)
     last_triggered_at = models.DateTimeField(null=True, blank=True)
     last_response_code = models.PositiveSmallIntegerField(null=True, blank=True)
