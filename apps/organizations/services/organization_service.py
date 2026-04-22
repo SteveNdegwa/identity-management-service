@@ -1,359 +1,467 @@
 from typing import Optional
 
-from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils.text import slugify
 
-from apps.accounts.models import SystemUser, SystemUserStatus
+from apps.accounts.models import SystemUser
 from apps.base.models import Country
 from apps.organizations.models import (
     Organization,
-    Branch,
-    OrganizationSettings,
     OrganizationCountry,
+    OrganizationSettings,
+    Branch,
 )
-from apps.permissions.models import Role
-from apps.permissions.services.permission_resolver import PermissionResolverService
-from apps.systems.models import System, SystemSettings
-from apps.audit.models import AuditLog, AuditEventType
+from apps.systems.models import System
+from audit.models import AuditLog, AuditEventType
+
+
+class OrganizationServiceError(Exception):
+    pass
 
 
 class OrganizationService:
 
     @transaction.atomic
-    def create_organization(
+    def update_organization(
             self,
-            system: System,
-            name: str,
-            slug: str,
-            countries: list[Country],
-            owner: Optional[SystemUser] = None,
-            description: str = "",
-            logo_url: str = "",
-            website: str = "",
+            organization: Organization,
+            performed_by: SystemUser,
+            name: Optional[str] = None,
+            description: Optional[str] = None,
+            logo_url: Optional[str] = None,
+            website: Optional[str] = None,
     ) -> Organization:
-        country_ids = list({c.id for c in countries})
+        updated = []
 
-        valid_country_ids = set(
-            system.available_countries
-            .filter(id__in=country_ids)
-            .values_list("id", flat=True)
-        )
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise OrganizationServiceError("Organization name cannot be blank.")
+            # Regenerate slug only if name actually changed
+            if name != organization.name:
+                new_slug = self._unique_slug(organization.system, name, exclude_id=organization.id)
+                organization.slug = new_slug
+                updated.append("slug")
+            organization.name = name
+            updated.append("name")
 
-        invalid_ids = set(country_ids) - valid_country_ids
-        if invalid_ids:
-            invalid_countries = [c.name for c in countries if c.id in invalid_ids]
-            raise ValueError(
-                f"{system.name} is not available in: {', '.join(invalid_countries)}."
+        if description is not None:
+            organization.description = description
+            updated.append("description")
+
+        if logo_url is not None:
+            organization.logo_url = logo_url
+            updated.append("logo_url")
+
+        if website is not None:
+            organization.website = website
+            updated.append("website")
+
+        if updated:
+            organization.save(update_fields=updated)
+            self._audit(
+                AuditEventType.ORG_UPDATED,
+                actor_system_user=performed_by,
+                subject=organization,
+                payload={"updated_fields": updated},
             )
 
-        org = Organization.objects.create(
-            system=system,
-            name=name,
-            slug=slug,
-            owner=owner,
-            description=description,
-            logo_url=logo_url,
-            website=website,
-        )
-
-        OrganizationCountry.objects.bulk_create([
-            OrganizationCountry(
-                organization=org,
-                country_id=cid,
-            )
-            for cid in country_ids
-        ])
-
-        self._audit(
-            AuditEventType.ORG_CREATED,
-            actor=owner,
-            subject=org,
-            payload={
-                "name": name,
-                "countries": [c.code for c in countries],
-            },
-        )
-
-        return org
+        return organization
 
     @transaction.atomic
-    def activate_in_country(
+    def deactivate_organization(
             self,
-            org: Organization,
+            organization: Organization,
+            performed_by: SystemUser,
+    ) -> Organization:
+        if not organization.is_active:
+            raise OrganizationServiceError("Organization is already inactive.")
+
+        organization.is_active = False
+        organization.save(update_fields=["is_active"])
+
+        self._audit(
+            AuditEventType.ORG_DEACTIVATED,
+            actor_system_user=performed_by,
+            subject=organization,
+            payload={"name": organization.name},
+        )
+
+        return organization
+
+    @transaction.atomic
+    def reactivate_organization(
+            self,
+            organization: Organization,
+            performed_by: SystemUser,
+    ) -> Organization:
+        if organization.is_active:
+            raise OrganizationServiceError("Organization is already active.")
+
+        organization.is_active = True
+        organization.save(update_fields=["is_active"])
+
+        self._audit(
+            AuditEventType.ORG_REACTIVATED,
+            actor_system_user=performed_by,
+            subject=organization,
+            payload={"name": organization.name},
+        )
+
+        return organization
+
+    @transaction.atomic
+    def add_country(
+            self,
+            organization: Organization,
             country: Country,
+            performed_by: SystemUser,
             registration_number: str = "",
             tax_id: str = "",
     ) -> OrganizationCountry:
-        if not org.system.available_countries.filter(id=country.id).exists():
-            raise ValueError(
-                f"{org.system.name} is not available in {country.name}."
+        if not organization.system.available_countries.filter(id=country.id).exists():
+            raise OrganizationServiceError(
+                f"{organization.system.name} is not available in {country.name}."
             )
-        oc, _ = OrganizationCountry.objects.get_or_create(
-            organization=org,
+
+        if OrganizationCountry.objects.filter(organization=organization, country=country).exists():
+            raise OrganizationServiceError(
+                f"{organization.name} already operates in {country.name}."
+            )
+
+        org_country = OrganizationCountry.objects.create(
+            organization=organization,
             country=country,
-            defaults={
-                "registration_number": registration_number,
-                "tax_id": tax_id,
-            },
+            registration_number=registration_number,
+            tax_id=tax_id,
+            is_active=True,
         )
-        return oc
 
-    def set_setting(
-            self,
-            org: Organization,
-            key: str,
-            value: str,
-            value_type: str = "string",
-            updated_by: Optional[SystemUser] = None,
-            is_secret: bool = False,
-            description: str = "",
-    ) -> OrganizationSettings:
-        setting, _ = OrganizationSettings.objects.update_or_create(
-            organization=org,
-            key=key,
-            defaults={
-                "value": value,
-                "value_type": value_type,
-                "updated_by": updated_by,
-                "is_secret": is_secret,
-                "description": description,
-            },
-        )
         self._audit(
-            AuditEventType.ORG_SETTINGS_CHANGED,
-            actor=updated_by,
-            subject=org,
+            AuditEventType.ORG_COUNTRY_ADDED,
+            actor_system_user=performed_by,
+            subject=org_country,
             payload={
-                "key": key,
-                "value": "***" if is_secret else value,
+                "organization": organization.name,
+                "country": country.name,
             },
         )
-        return setting
 
-    @staticmethod
-    def get_setting(org: Organization, key: str, default=None):
-        try:
-            return OrganizationSettings.objects.get(
-                organization=org, key=key
-            ).typed_value()
-        except OrganizationSettings.DoesNotExist:
-            pass
-        try:
-            return SystemSettings.objects.get(
-                system=org.system, key=key
-            ).typed_value()
-        except SystemSettings.DoesNotExist:
-            return default
+        return org_country
+
+    @transaction.atomic
+    def update_country(
+            self,
+            org_country: OrganizationCountry,
+            performed_by: SystemUser,
+            registration_number: Optional[str] = None,
+            tax_id: Optional[str] = None,
+    ) -> OrganizationCountry:
+        updated = []
+        if registration_number is not None:
+            org_country.registration_number = registration_number
+            updated.append("registration_number")
+        if tax_id is not None:
+            org_country.tax_id = tax_id
+            updated.append("tax_id")
+        if updated:
+            org_country.save(update_fields=updated)
+            self._audit(
+                AuditEventType.ORG_COUNTRY_UPDATED,
+                actor_system_user=performed_by,
+                subject=org_country,
+                payload={"updated_fields": updated},
+            )
+
+        return org_country
+
+    @transaction.atomic
+    def deactivate_country(
+            self,
+            org_country: OrganizationCountry,
+            performed_by: SystemUser,
+    ) -> OrganizationCountry:
+        if not org_country.is_active:
+            raise OrganizationServiceError("This country entry is already inactive.")
+
+        org_country.is_active = False
+        org_country.save(update_fields=["is_active"])
+
+        self._audit(
+            AuditEventType.ORG_COUNTRY_DEACTIVATED,
+            actor_system_user=performed_by,
+            subject=org_country,
+            payload={"country": org_country.country.name},
+        )
+
+        return org_country
 
     @transaction.atomic
     def create_branch(
             self,
-            org: Organization,
+            organization: Organization,
             country: Country,
+            performed_by: SystemUser,
             name: str,
             code: str = "",
             parent: Optional[Branch] = None,
-            address: str = "",
-            metadata: dict = None,
+            metadata: Optional[dict] = None,
     ) -> Branch:
-        if not org.countries.filter(id=country.id).exists():
-            raise ValueError(
-                f"{org.name} is not active in {country.name}."
+        if not name.strip():
+            raise OrganizationServiceError("Branch name is required.")
+
+        if not OrganizationCountry.objects.filter(
+            organization=organization, country=country, is_active=True,
+        ).exists():
+            raise OrganizationServiceError(
+                f"{organization.name} does not operate in {country.name}. "
+                "Add the country to the organization first."
             )
+
+        if code:
+            if Branch.objects.filter(
+                organization=organization, country=country, code=code,
+            ).exists():
+                raise OrganizationServiceError(
+                    f"A branch with code '{code}' already exists for {organization.name} in {country.name}."
+                )
+
+        if parent:
+            if parent.organization_id != organization.id:
+                raise OrganizationServiceError("Parent branch belongs to a different organization.")
+            if parent.country_id != country.id:
+                raise OrganizationServiceError("Parent branch is in a different country.")
+
         branch = Branch.objects.create(
-            organization=org,
+            organization=organization,
             country=country,
-            name=name,
-            code=code,
+            name=name.strip(),
+            code=code.strip(),
             parent=parent,
-            address=address,
+            is_active=True,
             metadata=metadata or {},
         )
+
         self._audit(
             AuditEventType.BRANCH_CREATED,
+            actor_system_user=performed_by,
             subject=branch,
-            payload={"org": org.name, "country": country.code, "name": name},
+            payload={
+                "organization": organization.name,
+                "country": country.name,
+                "name": branch.name,
+            },
         )
+
         return branch
 
+    @transaction.atomic
     def update_branch(
-        self,
-        branch: Branch,
-        updated_by: Optional[SystemUser] = None,
-        **fields,
+            self,
+            branch: Branch,
+            performed_by: SystemUser,
+            name: Optional[str] = None,
+            code: Optional[str] = None,
+            parent: Optional[Branch] = None,
+            metadata: Optional[dict] = None,
     ) -> Branch:
-        allowed = {
-            "name", "code", "address", "is_active",
-            "metadata", "parent"
-        }
         updated = []
-        for key, value in fields.items():
-            if key in allowed:
-                setattr(branch, key, value)
-                updated.append(key)
+
+        if name is not None:
+            if not name.strip():
+                raise OrganizationServiceError("Branch name cannot be blank.")
+            branch.name = name.strip()
+            updated.append("name")
+
+        if code is not None:
+            new_code = code.strip()
+            if new_code and new_code != branch.code:
+                if Branch.objects.filter(
+                    organization=branch.organization,
+                    country=branch.country,
+                    code=new_code,
+                ).exclude(id=branch.id).exists():
+                    raise OrganizationServiceError(
+                        f"A branch with code '{new_code}' already exists in this country."
+                    )
+            branch.code = new_code
+            updated.append("code")
+
+        if parent is not None:
+            if parent.id == branch.id:
+                raise OrganizationServiceError("A branch cannot be its own parent.")
+            if parent.organization_id != branch.organization_id:
+                raise OrganizationServiceError("Parent branch belongs to a different organization.")
+            if parent.country_id != branch.country_id:
+                raise OrganizationServiceError("Parent branch is in a different country.")
+            if self._is_descendant(branch, parent):
+                raise OrganizationServiceError("Cannot set a descendant as the parent (circular reference).")
+            branch.parent = parent
+            updated.append("parent")
+
+        if metadata is not None:
+            branch.metadata = metadata
+            updated.append("metadata")
+
         if updated:
             branch.save(update_fields=updated)
             self._audit(
                 AuditEventType.BRANCH_UPDATED,
-                actor=updated_by,
+                actor_system_user=performed_by,
                 subject=branch,
                 payload={"updated_fields": updated},
             )
+
         return branch
 
     @transaction.atomic
-    def change_member_role(
+    def deactivate_branch(
             self,
-            member: SystemUser,
-            new_role: Role,
-            changed_by: Optional[SystemUser] = None,
-            reason: str = "",
-    ) -> SystemUser:
-        if new_role.system_id != member.organization.system_id:
-            raise ValidationError("New role must belong to the same system.")
+            branch: Branch,
+            performed_by: SystemUser,
+    ) -> Branch:
+        if not branch.is_active:
+            raise OrganizationServiceError("Branch is already inactive.")
 
-        old_role_name = member.role.name
-        member.role = new_role
-        member.save(update_fields=["role"])
+        branch.is_active = False
+        branch.save(update_fields=["is_active"])
 
-        self._invalidate_perm_cache(member)
         self._audit(
-            AuditEventType.MEMBER_ROLE_CHANGED,
-            actor=changed_by,
-            subject=member,
-            payload={
-                "old_role": old_role_name,
-                "new_role": new_role.name,
-                "org": member.organization.name,
-                "country": member.country.code,
-                "reason": reason,
-            },
+            AuditEventType.BRANCH_DEACTIVATED,
+            actor_system_user=performed_by,
+            subject=branch,
+            payload={"name": branch.name},
         )
 
-        return member
+        return branch
 
     @transaction.atomic
-    def suspend_member(
+    def reactivate_branch(
             self,
-            member: SystemUser,
-            suspended_by: Optional[SystemUser] = None,
-            reason: str = "",
-    ) -> None:
-        if member.status != SystemUserStatus.ACTIVE:
-            raise ValidationError("Member must have status ACTIVE.")
+            branch: Branch,
+            performed_by: SystemUser,
+    ) -> Branch:
+        if branch.is_active:
+            raise OrganizationServiceError("Branch is already active.")
 
-        member.status = SystemUserStatus.SUSPENDED
-        member.save(update_fields=["status"])
+        branch.is_active = True
+        branch.save(update_fields=["is_active"])
 
-        self._invalidate_perm_cache(member)
         self._audit(
-            AuditEventType.MEMBER_SUSPENDED,
-            actor=suspended_by,
-            subject=member,
-            payload={
-                "org": member.organization.name,
-                "country": member.country.code,
-                "reason": reason,
-            },
+            AuditEventType.BRANCH_REACTIVATED,
+            actor_system_user=performed_by,
+            subject=branch,
+            payload={"name": branch.name},
         )
 
+        return branch
+
     @transaction.atomic
-    def unsuspend_member(
+    def set_setting(
             self,
-            member: SystemUser,
-            unsuspended_by: Optional[SystemUser] = None,
-            reason: str = "",
-    ) -> None:
-        if member.status != SystemUserStatus.SUSPENDED:
-            raise ValidationError("Member must have status SUSPENDED.")
+            organization: Organization,
+            performed_by: SystemUser,
+            key: str,
+            value: str,
+            value_type: str = OrganizationSettings.ValueType.STRING,
+            description: str = "",
+            is_secret: bool = False,
+    ) -> OrganizationSettings:
+        if not key.strip():
+            raise OrganizationServiceError("Setting key cannot be blank.")
 
-        member.status = SystemUserStatus.ACTIVE
-        member.save(update_fields=["status"])
-
-        self._audit(
-            AuditEventType.MEMBER_UNSUSPENDED,
-            actor=unsuspended_by,
-            subject=member,
-            payload={
-                "org": member.organization.name,
-                "country": member.country.code,
-                "reason": reason,
+        setting, created = OrganizationSettings.objects.update_or_create(
+            organization=organization,
+            key=key.strip(),
+            defaults={
+                "value": value,
+                "value_type": value_type,
+                "description": description,
+                "is_secret": is_secret,
+                "updated_by": performed_by,
             },
         )
+
+        self._audit(
+            AuditEventType.ORG_SETTINGS_CHANGED,
+            actor_system_user=performed_by,
+            subject=setting,
+            payload={
+                "key": key,
+                "created": created,
+            },
+        )
+
+        return setting
 
     @transaction.atomic
-    def remove_member(
-        self,
-        member: SystemUser,
-        removed_by: Optional[SystemUser] = None,
-        reason: str = "",
-    ) -> None:
-        if member.status == SystemUserStatus.REMOVED:
-            raise ValidationError("Member is already removed.")
+    def delete_setting(
+            self,
+            organization: Organization,
+            performed_by: SystemUser,
+            key: str,
+    ):
+        deleted, _ = OrganizationSettings.objects.filter(
+            organization=organization,
+            key=key,
+        ).delete()
+        if not deleted:
+            raise OrganizationServiceError(f"Setting '{key}' not found.")
 
-        member.status = SystemUserStatus.REMOVED
-        member.save(update_fields=["status"])
-
-        self._invalidate_perm_cache(member)
         self._audit(
-            AuditEventType.MEMBER_REMOVED,
-            actor=removed_by,
-            subject=member,
-            payload={
-                "org": member.organization.name,
-                "country": member.country.code,
-                "reason": reason,
-            },
+            AuditEventType.ORG_SETTING_DELETED,
+            actor_system_user=performed_by,
+            subject=organization,
+            payload={"key": key},
         )
-
-    @transaction.atomic
-    def set_branch_access(
-        self,
-        member: SystemUser,
-        all_branches: bool,
-        branches: Optional[list[Branch]] = None,
-        changed_by: Optional[SystemUser] = None,
-    ) -> SystemUser:
-        member.all_branches = all_branches
-        member.save(update_fields=["all_branches"])
-
-        member.branch_access.delete()
-        if not all_branches and branches:
-            member.branch_access.set(branches)
-
-        self._invalidate_perm_cache(member)
-        self._audit(
-            AuditEventType.MEMBER_BRANCH_CHANGED,
-            actor=changed_by,
-            subject=member,
-            payload={
-                "all_branches": all_branches,
-                "branch_ids": [branch.id for branch in branches] if branches else [],
-            },
-        )
-
-        return member
 
     @staticmethod
-    def _invalidate_perm_cache(system_user: SystemUser):
-        # noinspection PyBroadException
-        try:
-            PermissionResolverService().invalidate_cache(str(system_user.id))
-        except Exception:
-            pass
+    def _unique_slug(system: System, name: str, exclude_id: Optional[str] = None) -> str:
+        base = slugify(name)[:110]
+        slug = base
+        i = 1
+        qs = Organization.objects.filter(system=system, slug=slug)
+        if exclude_id:
+            qs = qs.exclude(id=exclude_id)
+        while qs.exists():
+            slug = f"{base}-{i}"
+            i += 1
+            qs = Organization.objects.filter(system=system, slug=slug)
+            if exclude_id:
+                qs = qs.exclude(id=exclude_id)
+        return slug
 
     @staticmethod
-    def _audit(event_type, actor=None, subject=None, payload=None):
-        actor_user = actor.user if actor and hasattr(actor, "user") else None
+    def _is_descendant(branch: Branch, candidate_parent: Branch) -> bool:
+        current = candidate_parent
+        visited = set()
+        while current is not None:
+            if current.id == branch.id:
+                return True
+            if current.id in visited:
+                break
+            visited.add(current.id)
+            current = current.parent
+        return False
+
+    @staticmethod
+    def _audit(
+            event_type: str,
+            actor_system_user: Optional[SystemUser] = None,
+            subject=None,
+            ip: str = "",
+            payload: dict = None,
+            outcome: str = "success",
+    ):
         AuditLog.objects.create(
             event_type=event_type,
-            actor_user_id=actor_user.id if actor_user else None,
-            actor_email=actor_user.get_email() or "" if actor_user else "",
-            actor_system_user_id=actor.id if actor else None,
+            actor_user_id=actor_system_user.user.id if actor_system_user and actor_system_user.user else None,
+            actor_email=actor_system_user.user.get_email() if actor_system_user and actor_system_user.user else "",
+            actor_system_user_id=actor_system_user.id if actor_system_user else None,
+            actor_ip=ip or None,
             subject_type=type(subject).__name__ if subject else "",
             subject_id=str(subject.id) if subject else "",
             subject_label=str(subject) if subject else "",
             payload=payload or {},
+            outcome=outcome,
         )
-
-

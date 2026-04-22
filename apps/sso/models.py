@@ -33,26 +33,17 @@ class UserMFA(BaseModel):
         related_name="mfa_methods",
         db_index=True
     )
-
     method = models.CharField(max_length=20, choices=MFAMethod.choices)
     is_primary = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
-    # Encrypted secret (TOTP) or public key (WebAuthn)
-    secret_encrypted = models.TextField(blank=True)
-
-    # WebAuthn: identifies the credential / authenticator device
-    credential_id = models.TextField(blank=True, db_index=True)
-
-    # SMS/Email: explicit override for delivery destination
-    # If blank, resolved at runtime from UserIdentifier
-    delivery_target = models.CharField(max_length=120, blank=True)
-
-    # Friendly name shown in "your enrolled devices" list
+    secret = models.TextField(blank=True) # TOTP secret
+    credential_id = models.TextField(blank=True, db_index=True)  # WebAuthn
+    delivery_target = models.CharField(max_length=120, blank=True)  # SMS/email
     device_name = models.CharField(max_length=120, blank=True)
 
     last_used_at = models.DateTimeField(null=True, blank=True)
-    verified_at  = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "accounts_user_mfa"
@@ -69,6 +60,7 @@ class UserMFA(BaseModel):
 class SSOSession(BaseModel):
     class AuthMethod(models.TextChoices):
         PASSWORD = "password", "Password"
+        PIN = "pin", "PIN"
         TOTP = "totp", "TOTP"
         WEBAUTHN = "webauthn", "WebAuthn / Passkey"
         SOCIAL = "social", "Social Login"
@@ -83,9 +75,10 @@ class SSOSession(BaseModel):
     )
     initiating_system = models.ForeignKey(
         "systems.System",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
-        related_name="initiated_sessions",
+        related_name="initiated_sessions"
     )
 
     session_token_hash = models.CharField(max_length=128, unique=True, db_index=True)
@@ -95,18 +88,14 @@ class SSOSession(BaseModel):
     device_id = models.CharField(max_length=120, blank=True, db_index=True)
     device_name = models.CharField(max_length=120, blank=True)
 
-    auth_method = models.CharField(
-        max_length=30,
-        choices=AuthMethod.choices,
-        default=AuthMethod.PASSWORD,
-    )
+    auth_method = models.CharField(max_length=30, choices=AuthMethod.choices, default=AuthMethod.PASSWORD)
 
     country = models.ForeignKey(
-        "core.Country",
+        "base.Country",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="sso_sessions",
+        related_name="sso_sessions"
     )
 
     is_active = models.BooleanField(default=True, db_index=True)
@@ -118,10 +107,12 @@ class SSOSession(BaseModel):
     requires_reauth = models.BooleanField(default=False)
     reauth_reason = models.CharField(max_length=120, blank=True)
 
+    system_mfa_satisfied_at = models.DateTimeField(null=True, blank=True)
+
     accessed_systems = models.ManyToManyField(
         "systems.System",
         through="SSOSessionSystemAccess",
-        related_name="sso_sessions",
+        related_name="sso_sessions"
     )
 
     class Meta:
@@ -135,8 +126,8 @@ class SSOSession(BaseModel):
         return timezone.now() >= self.expires_at
 
     def revoke(self, reason: str = "logout"):
-        self.is_active    = False
-        self.revoked_at   = timezone.now()
+        self.is_active = False
+        self.revoked_at = timezone.now()
         self.revoke_reason = reason
         self.save(update_fields=["is_active", "revoked_at", "revoke_reason"])
         self.token_sets.filter(is_active=True).update(is_active=False)
@@ -155,13 +146,31 @@ class SSOSessionSystemAccess(BaseModel):
         unique_together = [("session", "system")]
 
 
-class PendingContextMFA(BaseModel):
-    session = models.ForeignKey(
-        SSOSession,
-        on_delete=models.CASCADE,
-        related_name="pending_context_mfas"
+class SSOSessionMFAVerification(BaseModel):
+    session = models.ForeignKey(SSOSession, on_delete=models.CASCADE, related_name="mfa_verifications")
+    method = models.CharField(max_length=20, choices=MFAMethod.choices)
+    verified_at = models.DateTimeField(auto_now_add=True)
+    ip_address  = models.GenericIPAddressField(null=True, blank=True)
+
+    # Which system triggered this verification (null = global/system-level check)
+    system = models.ForeignKey(
+        "systems.System",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="mfa_verifications"
     )
 
+    class Meta:
+        db_table = "sso_session_mfa_verification"
+        indexes = [
+            models.Index(fields=["session", "method"]),
+            models.Index(fields=["session", "verified_at"]),
+        ]
+
+
+class PendingContextMFA(BaseModel):
+    session = models.ForeignKey(SSOSession, on_delete=models.CASCADE, related_name="pending_context_mfas")
     system_user = models.ForeignKey("accounts.SystemUser", on_delete=models.CASCADE)
 
     mfa_required_reason = models.CharField(max_length=255)
@@ -171,6 +180,7 @@ class PendingContextMFA(BaseModel):
     expires_at = models.DateTimeField()
     satisfied_at = models.DateTimeField(null=True, blank=True)
 
+    # OAuth parameters preserved so we can issue the code after MFA
     client = models.ForeignKey("systems.SystemClient", on_delete=models.CASCADE)
     redirect_uri = models.URLField()
     scopes = models.JSONField(default=list)
@@ -189,44 +199,9 @@ class PendingContextMFA(BaseModel):
         return timezone.now() >= self.expires_at
 
 
-class SSOSessionMFAVerification(BaseModel):
-    session = models.ForeignKey(
-        SSOSession,
-        on_delete=models.CASCADE,
-        related_name="mfa_verifications"
-    )
-    method = models.CharField(max_length=20, choices=MFAMethod.choices)
-    verified_at = models.DateTimeField(auto_now_add=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-
-    system = models.ForeignKey(
-        "systems.System",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="mfa_verifications",
-    )
-
-    class Meta:
-        db_table = "sso_session_mfa_verification"
-        indexes = [
-            models.Index(fields=["session", "method"]),
-            models.Index(fields=["session", "verified_at"]),
-        ]
-
-
 class PendingMFAEnrollment(BaseModel):
-    session = models.OneToOneField(
-        "sso.SSOSession",
-        on_delete=models.CASCADE,
-        related_name="pending_mfa_enrollment"
-    )
-    pending_context = models.ForeignKey(
-        PendingContextMFA,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-    )
+    session = models.OneToOneField(SSOSession, on_delete=models.CASCADE, related_name="pending_mfa_enrollment")
+    pending_context = models.ForeignKey(PendingContextMFA, null=True, blank=True, on_delete=models.SET_NULL)
     required_by = models.CharField(max_length=255)
     allowed_methods = models.JSONField(default=list)
     expires_at = models.DateTimeField()
@@ -243,22 +218,11 @@ class AuthorizationCode(BaseModel):
     code = models.CharField(max_length=128, unique=True, db_index=True)
     user = models.ForeignKey("accounts.User", on_delete=models.CASCADE)
     client = models.ForeignKey("systems.SystemClient", on_delete=models.CASCADE)
-    sso_session = models.ForeignKey(
-        SSOSession,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL
-    )
+    sso_session = models.ForeignKey(SSOSession, null=True, blank=True, on_delete=models.SET_NULL)
+    system_user = models.ForeignKey("accounts.SystemUser", null=True, blank=True, on_delete=models.SET_NULL)
 
     code_challenge = models.CharField(max_length=128, blank=True)
     code_challenge_method = models.CharField(max_length=10, default="S256")
-
-    system_user  = models.ForeignKey(
-        "accounts.SystemUser",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-    )
 
     redirect_uri = models.URLField()
     scopes = models.JSONField(default=list)
@@ -277,28 +241,17 @@ class AuthorizationCode(BaseModel):
 
 
 class TokenSet(BaseModel):
-    sso_session  = models.ForeignKey(
-        SSOSession,
-        on_delete=models.CASCADE,
-        related_name="token_sets"
-    )
+    sso_session = models.ForeignKey(SSOSession, on_delete=models.CASCADE, related_name="token_sets")
     user = models.ForeignKey("accounts.User", on_delete=models.CASCADE)
     client = models.ForeignKey("systems.SystemClient", on_delete=models.CASCADE)
-    system_user = models.ForeignKey(
-        "accounts.SystemUser",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL
-    )
+    system_user = models.ForeignKey("accounts.SystemUser", null=True, blank=True, on_delete=models.SET_NULL)
 
     scopes = models.JSONField(default=list)
     is_active = models.BooleanField(default=True, db_index=True)
 
     class Meta:
         db_table = "sso_token_set"
-        indexes = [
-            models.Index(fields=["user", "client", "is_active"]),
-        ]
+        indexes = [models.Index(fields=["user", "client", "is_active"])]
 
 
 class AccessToken(BaseModel):
@@ -315,18 +268,17 @@ class AccessToken(BaseModel):
 
     class Meta:
         db_table = "sso_access_token"
-        indexes  = [
+        indexes = [
             models.Index(fields=["jti"]),
             models.Index(fields=["expires_at", "is_revoked"]),
         ]
 
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
 
 class RefreshToken(BaseModel):
-    token_set = models.ForeignKey(
-        TokenSet,
-        on_delete=models.CASCADE,
-        related_name="refresh_tokens"
-    )
+    token_set = models.ForeignKey(TokenSet, on_delete=models.CASCADE, related_name="refresh_tokens")
     token_hash = models.CharField(max_length=128, unique=True, db_index=True)
     jti = models.UUIDField(unique=True, default=uuid.uuid4)
 
@@ -338,9 +290,10 @@ class RefreshToken(BaseModel):
 
     rotated_to = models.OneToOneField(
         "self",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
-        related_name="rotated_from",
+        related_name="rotated_from"
     )
 
     class Meta:
@@ -361,25 +314,30 @@ class PasswordlessChallenge(BaseModel):
     identifier = models.ForeignKey(
         "accounts.UserIdentifier",
         on_delete=models.CASCADE,
-        related_name="challenges"
+        related_name="passwordless_challenges"
     )
-    client = models.ForeignKey("systems.SystemClient", on_delete=models.CASCADE)
+    client = models.ForeignKey(
+        "systems.SystemClient",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
     sso_session = models.ForeignKey(
-        "sso.SSOSession",
-        null=True, blank=True,
+        SSOSession,
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
-        related_name="passwordless_challenges",
+        related_name="passwordless_challenges"
     )
-
     user_mfa = models.ForeignKey(
-        "accounts.UserMFA",
-        null=True, blank=True,
+        UserMFA,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
-        related_name="challenges",
+        related_name="challenges"
     )
 
     purpose = models.CharField(max_length=10, choices=Purpose.choices)
-
     code_hash = models.CharField(max_length=128)
     expires_at = models.DateTimeField()
     attempts = models.PositiveSmallIntegerField(default=0)
@@ -387,13 +345,11 @@ class PasswordlessChallenge(BaseModel):
     used_at = models.DateTimeField(null=True, blank=True)
 
     ip_requested = models.GenericIPAddressField(null=True, blank=True)
-    ip_verified  = models.GenericIPAddressField(null=True, blank=True)
+    ip_verified = models.GenericIPAddressField(null=True, blank=True)
 
     class Meta:
         db_table = "accounts_passwordless_challenge"
-        indexes  = [
-            models.Index(fields=["is_used", "expires_at"]),
-        ]
+        indexes = [models.Index(fields=["is_used", "expires_at"])]
 
     def is_expired(self):
         return timezone.now() >= self.expires_at
@@ -403,30 +359,27 @@ class MagicLink(BaseModel):
     user = models.ForeignKey(
         "accounts.User",
         on_delete=models.CASCADE,
-        related_name="passwordless_challenges"
+        related_name="magic_links"
     )
     identifier = models.ForeignKey(
         "accounts.UserIdentifier",
         on_delete=models.CASCADE,
-        related_name="challenges"
+        related_name="magic_links"
     )
     client = models.ForeignKey("systems.SystemClient", on_delete=models.CASCADE)
 
-    token_hash = models.CharField(max_length=128)
-    redirect_uri = models.URLField()
+    token_hash = models.CharField(max_length=128, unique=True, db_index=True)
     scopes = models.JSONField(default=list)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
-    used_at = models.DateTimeField(null=True)
+    used_at = models.DateTimeField(null=True, blank=True)
 
-    ip_requested = models.GenericIPAddressField(null=True)
-    ip_used = models.GenericIPAddressField(null=True)
+    ip_requested = models.GenericIPAddressField(null=True, blank=True)
+    ip_used = models.GenericIPAddressField(null=True, blank=True)
 
     class Meta:
         db_table = "accounts_magic_link"
-        indexes  = [
-            models.Index(fields=["is_used", "expires_at"]),
-        ]
+        indexes = [models.Index(fields=["is_used", "expires_at"])]
 
     def is_expired(self):
         return timezone.now() >= self.expires_at
@@ -445,18 +398,8 @@ class LoginContextSelection(BaseModel):
         blank=True,
         on_delete=models.SET_NULL
     )
-    country = models.ForeignKey(
-        "core.Country",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL
-    )
-    role = models.ForeignKey(
-        "permissions.Role",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL
-    )
+    country = models.ForeignKey("base.Country", null=True, blank=True, on_delete=models.SET_NULL)
+    role = models.ForeignKey("permissions.Role", null=True, blank=True, on_delete=models.SET_NULL)
 
     role_name_snapshot = models.CharField(max_length=120, blank=True)
     selected_at = models.DateTimeField(auto_now_add=True)

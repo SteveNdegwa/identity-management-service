@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from apps.base.models import BaseModel
 
@@ -32,7 +33,7 @@ class Permission(BaseModel):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="permissions",
+        related_name="permissions"
     )
     codename = models.CharField(max_length=120)
     name = models.CharField(max_length=255)
@@ -61,29 +62,29 @@ class Role(BaseModel):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="roles",
+        related_name="roles"
     )
 
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=100)
     description = models.TextField(blank=True)
 
-    permissions = models.ManyToManyField(
-        Permission,
-        through="RolePermission",
-        related_name="roles",
-    )
+    permissions = models.ManyToManyField(Permission, through="RolePermission", related_name="roles")
 
     parent_role = models.ForeignKey(
         "self",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="child_roles",
+        related_name="child_roles"
     )
 
     mfa_required = models.BooleanField(default=False)
     mfa_allowed_methods = models.JSONField(default=list, blank=True)
+    mfa_reauth_window_minutes = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="How recently MFA must have been verified (0 = any time in this session"
+    )
 
     is_system_defined = models.BooleanField(default=False)
     created_by_org = models.ForeignKey(
@@ -91,9 +92,8 @@ class Role(BaseModel):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="custom_roles",
+        related_name="custom_roles"
     )
-
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -114,28 +114,15 @@ class Role(BaseModel):
         if self.id in _visited:
             return set()
         _visited.add(self.id)
-
-        ids = set(
-            self.role_permissions
-                .filter(is_active=True)
-                .values_list("permission_id", flat=True)
-        )
+        ids = set(self.role_permissions.filter(is_active=True).values_list("permission_id", flat=True))
         if self.parent_role_id:
             ids |= self.parent_role.get_all_permission_ids(_visited)
         return ids
 
 
 class RolePermission(BaseModel):
-    role = models.ForeignKey(
-        Role,
-        on_delete=models.CASCADE,
-        related_name="role_permissions"
-    )
-    permission = models.ForeignKey(
-        Permission,
-        on_delete=models.CASCADE,
-        related_name="role_permissions"
-    )
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="role_permissions")
+    permission = models.ForeignKey(Permission, on_delete=models.CASCADE, related_name="role_permissions")
     conditions = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
     granted_at = models.DateTimeField(auto_now_add=True)
@@ -144,7 +131,7 @@ class RolePermission(BaseModel):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="granted_role_permissions",
+        related_name="granted_role_permissions"
     )
 
     class Meta:
@@ -155,7 +142,7 @@ class RolePermission(BaseModel):
 class UserPermissionOverride(BaseModel):
     class Effect(models.TextChoices):
         GRANT = "grant", "Grant"
-        DENY = "deny", "Deny"
+        DENY  = "deny",  "Deny"
 
     system_user = models.ForeignKey(
         "accounts.SystemUser",
@@ -165,7 +152,6 @@ class UserPermissionOverride(BaseModel):
     permission = models.ForeignKey(Permission, on_delete=models.CASCADE)
 
     effect = models.CharField(max_length=10, choices=Effect.choices)
-
     reason = models.TextField(blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -174,15 +160,18 @@ class UserPermissionOverride(BaseModel):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="issued_overrides"
+        related_name="issued_overrides",
     )
 
     class Meta:
         db_table = "permissions_user_override"
-        unique_together = [("system_user", "organization", "country", "permission")]
+        unique_together = [("system_user", "permission")]
 
     def __str__(self):
-        return (
-            f"{self.effect.upper()} {self.permission.codename} "
-            f"→ {self.system_user} in {self.organization}/{self.country.code}"
-        )
+        return f"{self.effect.upper()} {self.permission.codename} → {self.system_user}"
+
+    @property
+    def is_expired(self):
+        if self.expires_at is None:
+            return False
+        return timezone.now() > self.expires_at

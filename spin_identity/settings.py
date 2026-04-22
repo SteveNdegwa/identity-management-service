@@ -27,7 +27,6 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -45,6 +44,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'api.middleware.gateway.GatewayControlMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -121,3 +121,15 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+
+AWS_ACCESS_KEY_ID = "your-key"
+AWS_SECRET_ACCESS_KEY = "your-secret"
+AWS_STORAGE_BUCKET_NAME = "your-bucket"
+AWS_S3_ENDPOINT_URL = "https://<your-hetzner-endpoint>"
+AWS_S3_REGION_NAME = "eu-central"  # or your region
+AWS_QUERYSTRING_AUTH = False  # if public files
+AWS_S3_FILE_OVERWRITE = False
+AWS_DEFAULT_ACL = "private"  # or "public-read"

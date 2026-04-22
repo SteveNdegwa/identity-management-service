@@ -106,15 +106,15 @@ class UserManager(BaseUserManager):
         )
 
     @staticmethod
-    def get_by_identifier(value: str, identifier_type: str = None, realm: Realm = None) -> "User":
+    def get_by_identifier(realm: Realm, value: str, identifier_type: str = None) -> "User":
         detected = identifier_type or detect_identifier_type(value)
         normalised = IdentifierNormaliser.normalise(value, detected)
 
-        qs = UserIdentifier.objects.filter(value_normalised=normalised)
-        if identifier_type:
-            qs = qs.filter(identifier_type=identifier_type)
-        if realm:
-            qs = qs.filter(realm=realm)
+        qs = UserIdentifier.objects.filter(
+            realm=realm,
+            value_normalised=normalised,
+            identifier_type=detected
+        )
 
         row = qs.select_related("user").first()
         if not row:
@@ -159,7 +159,7 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
         if self.pk:  # Existing user
             old = User.objects.get(pk=self.pk)
             if old.realm_id != self.realm_id:
-                raise ValidationError("Cannot change realm directly. Use AccountService.migrate_user_to_new_realm()")
+                raise ValidationError("Cannot change realm.")
         super().save(*args, **kwargs)
 
     def set_pin(self, raw_pin: str):
