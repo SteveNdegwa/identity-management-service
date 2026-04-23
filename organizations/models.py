@@ -67,6 +67,7 @@ class OrganizationCountry(BaseModel):
     class Meta:
         db_table = "organizations_organization_country"
         unique_together = [("organization", "country")]
+        verbose_name_plural = "Organization countries"
 
     def __str__(self):
         return f"{self.organization.name} - {self.country.code}"
@@ -135,6 +136,7 @@ class OrganizationSettings(BaseModel):
     class Meta:
         db_table = "organizations_settings"
         unique_together = [("organization", "key")]
+        verbose_name_plural = "Organization settings"
 
     def __str__(self):
         return f"{self.organization.name}.{self.key}"
@@ -374,6 +376,7 @@ class OnboardingActivity(BaseModel):
     class Meta:
         db_table = "organizations_onboarding_activity"
         ordering = ["-created_at"]
+        verbose_name_plural = "Onboarding activities"
         indexes = [
             models.Index(fields=["onboarding", "activity_type"]),
             models.Index(fields=["onboarding", "created_at"]),

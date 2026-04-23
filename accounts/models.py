@@ -110,12 +110,12 @@ class User(BaseModel, SoftDeleteModel):
     realm = models.ForeignKey(
         Realm,
         on_delete=models.PROTECT,
-        related_name="users",
-        editable=False
+        related_name="users"
     )
     primary_country = models.ForeignKey(
         "base.Country",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="primary_users",
     )
@@ -192,7 +192,7 @@ class ActiveIdentifierManager(models.Manager):
 
 class UserIdentifier(BaseModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="identifiers")
-    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, editable=False, related_name="identifiers")
+    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, related_name="identifiers")
 
     identifier_type = models.CharField(max_length=30, choices=IdentifierType.choices)
     value = models.CharField(max_length=255)

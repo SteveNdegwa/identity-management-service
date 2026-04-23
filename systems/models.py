@@ -193,6 +193,7 @@ class SystemSettings(BaseModel):
     class Meta:
         db_table = "systems_settings"
         unique_together = [("system", "key")]
+        verbose_name_plural = "System settings"
 
     def __str__(self):
         return f"{self.system.name}.{self.key}"

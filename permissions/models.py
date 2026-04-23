@@ -16,6 +16,7 @@ class PermissionCategory(BaseModel):
 
     class Meta:
         db_table = "permissions_category"
+        verbose_name_plural = "Permission categories"
         unique_together = [("system", "slug")]
 
     def __str__(self):
