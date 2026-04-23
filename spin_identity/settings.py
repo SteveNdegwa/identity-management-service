@@ -36,15 +36,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'apps.accounts',
-    'apps.api',
-    'apps.audit',
-    'apps.base',
-    'apps.notifications',
-    'apps.organizations',
-    'apps.permissions',
-    'apps.sso',
-    'apps.systems',
+    'storages',
+    'accounts',
+    'api',
+    'audit',
+    'base',
+    'notifications',
+    'organizations',
+    'permissions',
+    'sso',
+    'systems',
 ]
 
 MIDDLEWARE = [
@@ -131,14 +132,25 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
 
-AWS_ACCESS_KEY_ID = "your-key"
-AWS_SECRET_ACCESS_KEY = "your-secret"
-AWS_STORAGE_BUCKET_NAME = "your-bucket"
-AWS_S3_ENDPOINT_URL = "https://<your-hetzner-endpoint>"
-AWS_S3_REGION_NAME = "eu-central"  # or your region
-AWS_QUERYSTRING_AUTH = False  # if public files
+AWS_ACCESS_KEY_ID = ""
+AWS_SECRET_ACCESS_KEY = ""
+AWS_STORAGE_BUCKET_NAME = ""
+
+AWS_S3_ENDPOINT_URL = ""
+AWS_S3_REGION_NAME = ""
+
+AWS_QUERYSTRING_AUTH = False
 AWS_S3_FILE_OVERWRITE = False
-AWS_DEFAULT_ACL = "private"  # or "public-read"
+AWS_DEFAULT_ACL = None
+
+AWS_S3_SIGNATURE_VERSION = "s3v4"
