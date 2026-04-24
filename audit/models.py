@@ -97,6 +97,7 @@ class AuditEventType(models.TextChoices):
     WEBHOOK_TRIGGERED = "system.webhook.triggered"
     WEBHOOK_FAILED = "system.webhook.failed"
 
+
 class AuditLog(BaseModel):
     class Outcome(models.TextChoices):
         SUCCESS = "success", "Success"

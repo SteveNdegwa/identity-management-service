@@ -6,3 +6,4 @@ venv
 .venv
 .env
 *.sqlite3
+.codex
