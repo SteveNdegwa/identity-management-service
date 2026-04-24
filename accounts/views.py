@@ -19,7 +19,7 @@ from accounts.models import SystemUser, SystemUserStatus, User, UserIdentifier
 from permissions.models import Role
 from systems.models import System
 from base.models import Country
-from organizations.models import Organization
+from organizations.models import Organization, Branch
 from utils.decorators import sso_session_required, user_login_required
 from utils.extended_request import ExtendedRequest
 from utils.response_provider import ResponseProvider
@@ -287,64 +287,28 @@ def claim_view(request: ExtendedRequest) -> JsonResponse:
         return ResponseProvider.server_error()
 
 
-@sso_session_required
+@user_login_required
 @require_GET
 def me_view(request: ExtendedRequest) -> JsonResponse:
     try:
-        system = _get_system(request.GET)
-        if not system:
-            return ResponseProvider.bad_request(
-                error="invalid_system",
-                message="System not found or inactive."
-            )
-
-        su = SystemUser.objects.select_related("system", "organization", "country", "role").filter(
-            user=request.sso_session.user,
-            system=system,
-            status=SystemUserStatus.ACTIVE,
-        ).first()
-        if not su:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="No active membership found in this system."
-            )
-
-        return ResponseProvider.success(**_system_user_payload(su))
+        return ResponseProvider.success(**_system_user_payload(request.system_user))
     except Exception as e:
         logger.exception("me_view: %s", e)
         return ResponseProvider.server_error()
 
 
-@sso_session_required
+@user_login_required
 @require_http_methods(["PATCH"])
 def me_update_view(request: ExtendedRequest) -> JsonResponse:
     try:
         data = request.data
-        system = _get_system(data)
-        if not system:
-            return ResponseProvider.bad_request(
-                error="invalid_system",
-                message="system_id is required."
-            )
-
-        su = SystemUser.objects.filter(
-            user=request.sso_session.user,
-            system=system,
-            status=SystemUserStatus.ACTIVE,
-        ).first()
-        if not su:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="No active membership found in this system."
-            )
-
         updatable = {
             "first_name", "last_name", "middle_name", "display_name",
             "date_of_birth", "gender", "profile_photo_url", "metadata", "external_ref",
         }
         fields = {k: v for k, v in data.items() if k in updatable}
         su = account_service.update_profile(
-            system_user=su,
+            system_user=request.system_user,
             updated_by=request.sso_session.user,
             **fields,
         )
@@ -499,6 +463,16 @@ def provision_system_user_view(request: ExtendedRequest) -> JsonResponse:
 
         org = _get_organization(data)
 
+        branches = []
+        for branch_id in data.get("branch_ids", []):
+            try:
+                branches.append(Branch.objects.get(id=branch_id, organization=org))
+            except Branch.DoesNotExist:
+                return ResponseProvider.bad_request(
+                    error="invalid_branch",
+                    message=f"Branch with id {branch_id} not found.''"
+                )
+
         # Current actor (system user)
         actor_su = SystemUser.objects.filter(
             user=request.sso_session.user,
@@ -519,6 +493,7 @@ def provision_system_user_view(request: ExtendedRequest) -> JsonResponse:
             role=role,
             organization=org,
             all_branches=data.get("all_branches", True),
+            branch_grants=branches,
             provisioning_email=data.get("email", ""),
             provisioning_phone=data.get("phone", ""),
             provisioning_national_id=data.get("national_id", ""),

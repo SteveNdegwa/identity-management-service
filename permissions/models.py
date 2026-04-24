@@ -70,7 +70,11 @@ class Role(BaseModel):
     slug = models.SlugField(max_length=100)
     description = models.TextField(blank=True)
 
-    permissions = models.ManyToManyField(Permission, through="RolePermission", related_name="roles")
+    permissions = models.ManyToManyField(
+        Permission,
+        through="RolePermission",
+        related_name="roles"
+    )
 
     parent_role = models.ForeignKey(
         "self",

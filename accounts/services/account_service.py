@@ -564,7 +564,6 @@ class AccountService:
     def update_profile(
         self,
         system_user: SystemUser,
-        updated_by: Optional[User] = None,
         **fields,
     ) -> SystemUser:
         allowed = {
@@ -580,7 +579,7 @@ class AccountService:
             system_user.save(update_fields=updated)
             self._audit(
                 AuditEventType.USER_UPDATED,
-                actor_user=updated_by or system_user.user,
+                actor_user=system_user.user,
                 subject=system_user,
                 payload={"updated_fields": updated},
             )
