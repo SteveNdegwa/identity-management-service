@@ -1,4 +1,5 @@
 import secrets
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -11,7 +12,6 @@ class System(BaseModel):
         Realm,
         on_delete=models.PROTECT,
         related_name="systems",
-        editable=False,
         help_text="Realm determines SSO boundary and identifier uniqueness"
     )
 
@@ -47,6 +47,13 @@ class System(BaseModel):
     allowed_social_providers = models.JSONField(default=list)
     registration_open = models.BooleanField(default=True)
     requires_approval = models.BooleanField(default=False)
+    allows_referrals = models.BooleanField(default=False)
+    referral_reward_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    auto_verify_referrals = models.BooleanField(default=False)
 
     mfa_required = models.BooleanField(default=False)
     mfa_required_enforced = models.BooleanField(default=False)
@@ -71,7 +78,15 @@ class System(BaseModel):
                 raise ValidationError(
                     "System realm cannot be changed after creation."
                 )
+        if self.allows_referrals and not self.registration_open:
+            raise ValidationError(
+                "Referrals can only be enabled for systems that allow self-registration."
+            )
         super().save(*args, **kwargs)
+
+    @property
+    def referrals_enabled(self) -> bool:
+        return self.registration_open and self.allows_referrals
 
     def get_effective_allowed_mfa_methods(self) -> list:
         return self.allowed_mfa_methods or []

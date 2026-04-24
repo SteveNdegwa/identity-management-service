@@ -16,6 +16,13 @@ class SystemAdminServiceError(Exception):
 
 
 class SystemAdminService:
+    @staticmethod
+    def _validate_referral_settings(*, allows_referrals: bool, registration_open: bool) -> None:
+        if allows_referrals and not registration_open:
+            raise SystemAdminServiceError(
+                "Referrals can only be enabled for systems that allow self-registration."
+            )
+
     @transaction.atomic
     def create_system(
         self,
@@ -30,6 +37,11 @@ class SystemAdminService:
         clean_name = (name or "").strip()
         if not clean_name:
             raise SystemAdminServiceError("System name is required.")
+
+        self._validate_referral_settings(
+            allows_referrals=kwargs.get("allows_referrals", False),
+            registration_open=kwargs.get("registration_open", True),
+        )
 
         final_slug = self._unique_slug(slug or clean_name)
         system = System.objects.create(
@@ -75,6 +87,9 @@ class SystemAdminService:
         allowed_social_providers: Optional[list] = None,
         registration_open: Optional[bool] = None,
         requires_approval: Optional[bool] = None,
+        allows_referrals: Optional[bool] = None,
+        referral_reward_amount = None,
+        auto_verify_referrals: Optional[bool] = None,
         mfa_required: Optional[bool] = None,
         mfa_required_enforced: Optional[bool] = None,
         allowed_mfa_methods: Optional[list] = None,
@@ -133,6 +148,15 @@ class SystemAdminService:
         if requires_approval is not None:
             system.requires_approval = requires_approval
             updated.append("requires_approval")
+        if allows_referrals is not None:
+            system.allows_referrals = allows_referrals
+            updated.append("allows_referrals")
+        if referral_reward_amount is not None:
+            system.referral_reward_amount = referral_reward_amount
+            updated.append("referral_reward_amount")
+        if auto_verify_referrals is not None:
+            system.auto_verify_referrals = auto_verify_referrals
+            updated.append("auto_verify_referrals")
         if mfa_required is not None:
             system.mfa_required = mfa_required
             updated.append("mfa_required")
@@ -144,7 +168,14 @@ class SystemAdminService:
             updated.append("allowed_mfa_methods")
 
         if updated:
+            self._validate_referral_settings(
+                allows_referrals=system.allows_referrals,
+                registration_open=system.registration_open,
+            )
             system.save(update_fields=updated)
+            if system.referrals_enabled:
+                from accounts.services.referral_service import ReferralService
+                ReferralService().ensure_system_referral_codes(system)
             self._audit(
                 AuditEventType.SYSTEM_SETTINGS_CHANGED,
                 actor_system_user=performed_by,

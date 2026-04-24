@@ -363,6 +363,7 @@ class SystemUser(BaseModel, SoftDeleteModel):
     profile_photo_url = models.URLField(blank=True)
 
     external_ref = models.CharField(max_length=120, blank=True, db_index=True)
+    referral_code = models.CharField(max_length=32, null=True, blank=True, unique=True, db_index=True)
 
     suspended_reason = models.TextField(blank=True)
     suspended_at = models.DateTimeField(null=True, blank=True)
@@ -409,6 +410,45 @@ class SystemUser(BaseModel, SoftDeleteModel):
     def full_name(self):
         parts = filter(None, [self.first_name, self.middle_name, self.last_name])
         return " ".join(parts) or self.display_name or ""
+
+
+class Referral(BaseModel):
+    referrer = models.ForeignKey(
+        SystemUser,
+        on_delete=models.CASCADE,
+        related_name="referrals_made",
+    )
+    referred = models.OneToOneField(
+        SystemUser,
+        on_delete=models.CASCADE,
+        related_name="referral_record",
+    )
+    system = models.ForeignKey(
+        "systems.System",
+        on_delete=models.CASCADE,
+        related_name="referrals",
+    )
+    referral_code = models.CharField(max_length=32, db_index=True)
+    is_verified = models.BooleanField(default=False)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    is_rewarded = models.BooleanField(default=False)
+    rewarded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "accounts_referral"
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(referrer=models.F("referred")),
+                name="accounts_referral_no_self_referral",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["system", "is_verified", "is_rewarded"]),
+            models.Index(fields=["referrer", "is_verified", "is_rewarded"]),
+        ]
+
+    def __str__(self):
+        return f"{self.referrer_id} -> {self.referred_id}"
 
 
 class SocialAccount(BaseModel, SoftDeleteModel):

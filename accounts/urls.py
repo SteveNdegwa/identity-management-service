@@ -13,6 +13,9 @@ urlpatterns = [
     # Own profile
     path("me/", views.me_view, name="account-me"),
     path("me/edit/", views.me_update_view, name="account-me-update"),
+    path("me/referrals/", views.my_referrals_view, name="account-my-referrals"),
+    path("me/referrals/attach/", views.attach_my_referral_view, name="account-my-referrals-attach"),
+    path("referrals/", views.referral_list_view, name="account-referral-list"),
 
     # Identifier management
     path("me/identifiers/", views.identifier_list_view, name="account-identifiers"),
@@ -48,5 +51,20 @@ urlpatterns = [
         "system-users/<str:system_user_id>/restore/",
         views.restore_system_user_view,
         name="account-restore"
+    ),
+    path(
+        "system-users/<str:system_user_id>/referrals/reward/",
+        views.reward_referrer_referrals_view,
+        name="account-referrer-reward"
+    ),
+    path(
+        "referrals/<str:referral_id>/verify/",
+        views.verify_referral_view,
+        name="account-referral-verify"
+    ),
+    path(
+        "referrals/<str:referral_id>/reward/",
+        views.reward_referral_view,
+        name="account-referral-reward"
     ),
 ]

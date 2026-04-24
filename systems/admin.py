@@ -77,7 +77,6 @@ class SystemAdmin(admin.ModelAdmin):
     )
 
     readonly_fields = (
-        "realm",
         "created_at",
         "updated_at",
     )

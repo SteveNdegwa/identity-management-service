@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Optional
 
 from django.http import JsonResponse
@@ -15,7 +16,8 @@ from accounts.services.account_service import (
     ClaimExpiredError,
     SystemUserStatusError, ManageIdentifierError, ProvisionSystemUserError,
 )
-from accounts.models import SystemUser, SystemUserStatus, User, UserIdentifier
+from accounts.services.referral_service import ReferralService, ReferralServiceError
+from accounts.models import SystemUser, SystemUserStatus, User, UserIdentifier, Referral
 from permissions.models import Role
 from systems.models import System
 from base.models import Country
@@ -26,6 +28,7 @@ from utils.response_provider import ResponseProvider
 
 logger = logging.getLogger(__name__)
 account_service = AccountService()
+referral_service = ReferralService()
 
 
 def _get_system(data: dict) -> Optional[System]:
@@ -92,6 +95,7 @@ def _system_user_payload(su: SystemUser) -> dict:
         "last_name": su.last_name,
         "display_name": su.display_name,
         "profile_photo_url": su.profile_photo_url,
+        "referral_code": su.referral_code,
     }
 
 
@@ -104,6 +108,39 @@ def _identifier_payload(ident: UserIdentifier) -> dict:
         "is_verified": ident.is_verified,
         "verified_at": ident.verified_at.isoformat() if ident.verified_at else None,
     }
+
+
+def _referral_payload(referral: Referral) -> dict:
+    return {
+        "id": str(referral.id),
+        "system_id": str(referral.system_id),
+        "referrer_system_user_id": str(referral.referrer_id),
+        "referrer_referral_code": referral.referral_code,
+        "referred_system_user_id": str(referral.referred_id),
+        "is_verified": referral.is_verified,
+        "verified_at": referral.verified_at.isoformat() if referral.verified_at else None,
+        "is_rewarded": referral.is_rewarded,
+        "rewarded_at": referral.rewarded_at.isoformat() if referral.rewarded_at else None,
+        "reward_amount": str(referral.system.referral_reward_amount),
+        "created_at": referral.created_at.isoformat(),
+    }
+
+
+def _parse_bool_query(value: Optional[str]) -> Optional[bool]:
+    if value is None or value == "":
+        return None
+    lowered = value.lower()
+    if lowered in {"true", "1", "yes"}:
+        return True
+    if lowered in {"false", "0", "no"}:
+        return False
+    return None
+
+
+def _parse_datetime_query(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    return datetime.fromisoformat(value)
 
 
 @require_POST
@@ -140,6 +177,7 @@ def register_view(request: ExtendedRequest) -> JsonResponse:
             national_id=data.get("national_id"),
             password=data.get("password"),
             pin=data.get("pin"),
+            referral_code=data.get("referral_code"),
         )
         return ResponseProvider.success(
             user_id=str(user.id),
@@ -200,6 +238,7 @@ def register_link_view(request: ExtendedRequest) -> JsonResponse:
             role=role,
             primary_country=country,
             organization=org,
+            referral_code=data.get("referral_code"),
             ip_address=request.client_ip,
             **_profile_fields(data),
             email=data.get("email"),
@@ -291,6 +330,7 @@ def claim_view(request: ExtendedRequest) -> JsonResponse:
 @require_GET
 def me_view(request: ExtendedRequest) -> JsonResponse:
     try:
+        referral_service.ensure_referral_code(request.system_user)
         return ResponseProvider.success(**_system_user_payload(request.system_user))
     except Exception as e:
         logger.exception("me_view: %s", e)
@@ -315,6 +355,203 @@ def me_update_view(request: ExtendedRequest) -> JsonResponse:
         return ResponseProvider.success(**_system_user_payload(su))
     except Exception as e:
         logger.exception("me_update_view: %s", e)
+        return ResponseProvider.server_error()
+
+
+@user_login_required
+@require_GET
+def my_referrals_view(request: ExtendedRequest) -> JsonResponse:
+    try:
+        referral_service.ensure_referral_code(request.system_user)
+        referrals_made = (
+            Referral.objects
+            .filter(referrer=request.system_user)
+            .select_related("system", "referrer", "referred")
+            .order_by("-created_at")
+        )
+        referral_received = (
+            Referral.objects
+            .filter(referred=request.system_user)
+            .select_related("system", "referrer", "referred")
+            .first()
+        )
+
+        return ResponseProvider.success(
+            referral_code=request.system_user.referral_code,
+            referral_amount=str(request.system_user.system.referral_reward_amount),
+            auto_verify_referrals=request.system_user.system.auto_verify_referrals,
+            referred_by=_referral_payload(referral_received) if referral_received else None,
+            referrals=[_referral_payload(referral) for referral in referrals_made],
+        )
+    except Exception as e:
+        logger.exception("my_referrals_view: %s", e)
+        return ResponseProvider.server_error()
+
+
+@user_login_required(required_permission="accounts.manage_referrals")
+@require_GET
+def referral_list_view(request: ExtendedRequest) -> JsonResponse:
+    try:
+        system_id = request.GET.get("system_id")
+        if not system_id:
+            return ResponseProvider.bad_request(
+                error="missing_params",
+                message="system_id is required.",
+            )
+
+        qs = (
+            Referral.objects
+            .filter(system_id=system_id)
+            .select_related("system", "referrer", "referred")
+            .order_by("-created_at")
+        )
+
+        verified = _parse_bool_query(request.GET.get("verified"))
+        if verified is not None:
+            qs = qs.filter(is_verified=verified)
+
+        rewarded = _parse_bool_query(request.GET.get("rewarded"))
+        if rewarded is not None:
+            qs = qs.filter(is_rewarded=rewarded)
+
+        if referrer_system_user_id := request.GET.get("referrer_system_user_id"):
+            qs = qs.filter(referrer_id=referrer_system_user_id)
+
+        if referred_system_user_id := request.GET.get("referred_system_user_id"):
+            qs = qs.filter(referred_id=referred_system_user_id)
+
+        if referral_code := request.GET.get("referral_code"):
+            qs = qs.filter(referral_code__iexact=referral_code.strip())
+
+        created_from = _parse_datetime_query(request.GET.get("created_from"))
+        if created_from:
+            qs = qs.filter(created_at__gte=created_from)
+
+        created_to = _parse_datetime_query(request.GET.get("created_to"))
+        if created_to:
+            qs = qs.filter(created_at__lte=created_to)
+
+        verified_from = _parse_datetime_query(request.GET.get("verified_from"))
+        if verified_from:
+            qs = qs.filter(verified_at__gte=verified_from)
+
+        verified_to = _parse_datetime_query(request.GET.get("verified_to"))
+        if verified_to:
+            qs = qs.filter(verified_at__lte=verified_to)
+
+        rewarded_from = _parse_datetime_query(request.GET.get("rewarded_from"))
+        if rewarded_from:
+            qs = qs.filter(rewarded_at__gte=rewarded_from)
+
+        rewarded_to = _parse_datetime_query(request.GET.get("rewarded_to"))
+        if rewarded_to:
+            qs = qs.filter(rewarded_at__lte=rewarded_to)
+
+        return ResponseProvider.success(
+            referrals=[_referral_payload(referral) for referral in qs]
+        )
+    except ValueError:
+        return ResponseProvider.bad_request(
+            error="invalid_datetime",
+            message="Date filters must be valid ISO datetimes.",
+        )
+    except Exception as e:
+        logger.exception("referral_list_view: %s", e)
+        return ResponseProvider.server_error()
+
+
+@user_login_required
+@require_POST
+def attach_my_referral_view(request: ExtendedRequest) -> JsonResponse:
+    try:
+        referral = referral_service.attach_referral(
+            referred=request.system_user,
+            referral_code=request.data.get("referral_code", ""),
+        )
+        referral = Referral.objects.select_related("system", "referrer", "referred").get(id=referral.id)
+        return ResponseProvider.success(**_referral_payload(referral))
+    except ReferralServiceError as e:
+        return ResponseProvider.bad_request(
+            error="referral_error",
+            message=str(e),
+        )
+    except Exception as e:
+        logger.exception("attach_my_referral_view: %s", e)
+        return ResponseProvider.server_error()
+
+
+@user_login_required(required_permission="accounts.manage_referrals")
+@require_POST
+def verify_referral_view(request: ExtendedRequest, referral_id: str) -> JsonResponse:
+    try:
+        referral = Referral.objects.select_related("system", "referrer", "referred").get(id=referral_id)
+        referral = referral_service.verify_referral(referral)
+        return ResponseProvider.success(**_referral_payload(referral))
+    except Referral.DoesNotExist:
+        return ResponseProvider.not_found(
+            error="not_found",
+            message="Referral not found.",
+        )
+    except ReferralServiceError as e:
+        return ResponseProvider.bad_request(
+            error="referral_error",
+            message=str(e),
+        )
+    except Exception as e:
+        logger.exception("verify_referral_view: %s", e)
+        return ResponseProvider.server_error()
+
+
+@user_login_required(required_permission="accounts.manage_referrals")
+@require_POST
+def reward_referral_view(request: ExtendedRequest, referral_id: str) -> JsonResponse:
+    try:
+        referral = Referral.objects.select_related("system", "referrer", "referred").get(id=referral_id)
+        referral = referral_service.reward_referral(referral)
+        return ResponseProvider.success(**_referral_payload(referral))
+    except Referral.DoesNotExist:
+        return ResponseProvider.not_found(
+            error="not_found",
+            message="Referral not found.",
+        )
+    except ReferralServiceError as e:
+        return ResponseProvider.bad_request(
+            error="referral_error",
+            message=str(e),
+        )
+    except Exception as e:
+        logger.exception("reward_referral_view: %s", e)
+        return ResponseProvider.server_error()
+
+
+@user_login_required(required_permission="accounts.manage_referrals")
+@require_POST
+def reward_referrer_referrals_view(request: ExtendedRequest, system_user_id: str) -> JsonResponse:
+    try:
+        referrer = SystemUser.objects.select_related("system").get(id=system_user_id)
+        rewarded = referral_service.reward_referrals(
+            referrer=referrer,
+            referral_ids=request.data.get("referral_ids"),
+        )
+        rewarded_ids = [str(referral.id) for referral in rewarded]
+        total_amount = referrer.system.referral_reward_amount * len(rewarded)
+        return ResponseProvider.success(
+            rewarded_referral_ids=rewarded_ids,
+            rewarded_count=len(rewarded_ids),
+            total_amount=str(total_amount),
+        )
+    except SystemUser.DoesNotExist:
+        return ResponseProvider.not_found(
+            error="not_found",
+            message="System user not found.",
+        )
+    except ReferralServiceError as e:
+        return ResponseProvider.bad_request(
+            error="referral_error",
+            message=str(e),
+        )
+    except Exception as e:
+        logger.exception("reward_referrer_referrals_view: %s", e)
         return ResponseProvider.server_error()
 
 

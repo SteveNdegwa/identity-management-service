@@ -15,6 +15,7 @@ from accounts.models import (
     Gender,
 )
 from accounts.identifier_utils import IdentifierNormaliser
+from accounts.services.referral_service import ReferralService, ReferralServiceError
 from base.models import Country, Realm
 from organizations.models import Organization, Branch
 from permissions.models import Role
@@ -74,6 +75,7 @@ class LinkAccountRequired(AccountServiceError):
 class AccountService:
     def __init__(self):
         self._normaliser = IdentifierNormaliser()
+        self._referral_service = ReferralService()
 
     @transaction.atomic
     def invite(
@@ -171,6 +173,8 @@ class AccountService:
 
         if branch_grants and not all_branches:
             system_user.branch_access.set(branch_grants)
+
+        self._referral_service.ensure_referral_code(system_user)
 
         lookup_id, raw_token = self.invite(system_user=system_user, invited_by=provisioned_by)
 
@@ -417,6 +421,7 @@ class AccountService:
         pin: Optional[str] = None,
         primary_country: Optional[Country] = None,
         organization: Optional[Organization] = None,
+        referral_code: Optional[str] = None,
         ip_address: str = "",
     ) -> Tuple[User, SystemUser]:
         if not system.registration_open:
@@ -481,6 +486,15 @@ class AccountService:
             gender=gender,
         )
 
+        if referral_code:
+            try:
+                self._referral_service.attach_referral(
+                    referred=system_user,
+                    referral_code=referral_code,
+                )
+            except ReferralServiceError as e:
+                raise SelfRegistrationError(str(e))
+
         self._audit(
             AuditEventType.USER_CREATED,
             actor_user=user,
@@ -503,6 +517,7 @@ class AccountService:
         gender: str = Gender.OTHER,
         organization: Optional[Organization] = None,
         primary_country: Optional[Country] = None,
+        referral_code: Optional[str] = None,
         email: Optional[str] = None,
         phone_number: Optional[str] = None,
         username: Optional[str] = None,
@@ -551,6 +566,15 @@ class AccountService:
             date_of_birth=date_of_birth,
             gender=gender,
         )
+
+        if referral_code:
+            try:
+                self._referral_service.attach_referral(
+                    referred=system_user,
+                    referral_code=referral_code,
+                )
+            except ReferralServiceError as e:
+                raise SelfRegistrationError(str(e))
 
         self._audit(
             AuditEventType.USER_LINKED_TO_SYSTEM,
@@ -890,6 +914,7 @@ class AccountService:
                 "status": SystemUserStatus.ACTIVE,
             },
         )
+        ReferralService().ensure_referral_code(system_user)
         return system_user
 
     @staticmethod
