@@ -33,6 +33,7 @@ class UserManager(BaseUserManager):
 
     def _create_user(
             self,
+            realm: Realm,
             email: str,
             phone_number: str,
             password: Optional[str],
@@ -45,6 +46,7 @@ class UserManager(BaseUserManager):
             raise ValueError("Phone number is required.")
 
         user = self.model(
+            realm=realm,
             email=self.normalize_email(email).strip().lower(),
             phone_number=phone_number.strip(),
             **extra_fields,
@@ -63,6 +65,7 @@ class UserManager(BaseUserManager):
 
     def create_user(
             self,
+            realm: Realm,
             email: str,
             phone_number: str,
             password: Optional[str] = None,
@@ -72,7 +75,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
         extra_fields.setdefault("is_active", True)
-        return self._create_user(email, phone_number, password, pin, **extra_fields)
+        return self._create_user(realm, email, phone_number, password, pin, **extra_fields)
 
     def create_superuser(
             self,
@@ -90,7 +93,9 @@ class UserManager(BaseUserManager):
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
 
-        return self._create_user(email, phone_number, password, None, **extra_fields)
+        realm, _ = Realm.objects.get_or_create(name="Admin")
+
+        return self._create_user(realm, email, phone_number, password, None, **extra_fields)
 
     def get_by_identifier(self, realm: Realm, value: str, identifier_type: IdentifierType) -> "User":
         from identifier_utils import IdentifierNormaliser
@@ -109,8 +114,6 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
     realm = models.ForeignKey(
         Realm,
-        null=True,
-        blank=True,
         on_delete=models.PROTECT,
         related_name="users",
     )

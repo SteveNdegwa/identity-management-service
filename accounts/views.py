@@ -226,7 +226,11 @@ def _post_registration_response(
         payload["auto_login_reason"] = "valid_client_id_required"
         return ResponseProvider.success(**payload)
 
-    session = sso_service.create_session_for_user(
+    existing_session_id = ""
+    if request.sso_session and request.sso_session.user_id == user.id:
+        existing_session_id = str(request.sso_session.id)
+
+    session = sso_service.create_or_link_session_for_user(
         user=user,
         client=client,
         auth_method=auth_method,
@@ -234,6 +238,7 @@ def _post_registration_response(
         user_agent=request.user_agent,
         device_id=request.data.get("device_id", ""),
         device_name=request.data.get("device_name", ""),
+        existing_session_id=existing_session_id,
     )
     payload["session_id"] = str(session.id)
     try:

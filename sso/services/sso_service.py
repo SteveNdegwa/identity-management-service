@@ -465,6 +465,34 @@ class SSOService:
         self._check_system_mfa(session, client)
         return self.get_login_contexts(session, client.system)
 
+    @transaction.atomic
+    def create_or_link_session_for_user(
+            self,
+            user: User,
+            client: SystemClient,
+            auth_method: str,
+            ip_address: str = "",
+            user_agent: str = "",
+            device_id: str = "",
+            device_name: str = "",
+            existing_session_id: str = "",
+    ) -> SSOSession:
+        session = self._get_or_create_session(
+            user=user,
+            client=client,
+            auth_method=auth_method,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            device_id=device_id,
+            device_name=device_name,
+            reauth_session_id=existing_session_id,
+        )
+        SSOSessionSystemAccess.objects.get_or_create(
+            session=session,
+            system=client.system,
+        )
+        return session
+
     @staticmethod
     def get_login_contexts(session: SSOSession, system: System) -> list:
         system_users = (
