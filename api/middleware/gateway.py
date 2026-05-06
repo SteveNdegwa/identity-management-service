@@ -39,7 +39,7 @@ class GatewayControlMiddleware:
             user_id=request.user.id if request.user else None,
             system_user_id=request.system_user.id if request.system_user else None,
             system_client_id=request.system_client.id if request.system_client else None,
-            token_jti=request.acess_token.jti if request.access_token else None,
+            token_jti=request.access_token.jti if request.access_token else None,
             is_authenticated=request.is_authenticated,
             ip_address=request.client_ip,
             user_agent=request.user_agent,
@@ -160,10 +160,11 @@ class GatewayControlMiddleware:
                     request.user = access_token.token_set.user
                     request.user_permissions = access_token.permissions_snapshot
                     request.system_user = access_token.token_set.system_user
-                    request.system_client = access_token.token_set.system_client
+                    request.system_client = access_token.token_set.client
                     request.sso_session = access_token.token_set.sso_session
                     request.access_token = access_token
                     request.is_authenticated = True
+                    request.user_context_selected = True
             except AccessToken.DoesNotExist:
                 pass
 
@@ -173,6 +174,7 @@ class GatewayControlMiddleware:
                 try:
                     sso_session = SSOSession.objects.get(id=sso_session_id)
                     if sso_session.is_active and not sso_session.is_expired():
+                        request.is_authenticated = True
                         request.sso_session = sso_session
                         request.user = sso_session.user
                 except SSOSession.DoesNotExist:

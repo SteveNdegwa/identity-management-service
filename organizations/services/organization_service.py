@@ -1,6 +1,7 @@
 from typing import Optional
 
 from django.db import transaction
+from django.utils import timezone
 from django.utils.text import slugify
 
 from accounts.models import SystemUser
@@ -134,6 +135,9 @@ class OrganizationService:
             country=country,
             registration_number=registration_number,
             tax_id=tax_id,
+            approval_status=OrganizationCountry.ApprovalStatus.APPROVED,
+            approved_at=timezone.now(),
+            approved_by=performed_by,
             is_active=True,
         )
 
@@ -211,11 +215,14 @@ class OrganizationService:
             raise OrganizationServiceError("Branch name is required.")
 
         if not OrganizationCountry.objects.filter(
-            organization=organization, country=country, is_active=True,
+            organization=organization,
+            country=country,
+            is_active=True,
+            approval_status=OrganizationCountry.ApprovalStatus.APPROVED,
         ).exists():
             raise OrganizationServiceError(
-                f"{organization.name} does not operate in {country.name}. "
-                "Add the country to the organization first."
+                f"{organization.name} is not approved to operate in {country.name}. "
+                "Complete country onboarding first."
             )
 
         if code:

@@ -2,6 +2,7 @@ import secrets
 from typing import Optional
 
 import bcrypt
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils.text import slugify
 
@@ -9,6 +10,7 @@ from accounts.models import SystemUser
 from audit.models import AuditEventType, AuditLog
 from base.models import Country, Realm
 from systems.models import System, SystemClient, SystemSettings
+from utils.social_providers import normalize_social_provider_list
 
 
 class SystemAdminServiceError(Exception):
@@ -16,6 +18,15 @@ class SystemAdminServiceError(Exception):
 
 
 class SystemAdminService:
+    @staticmethod
+    def _normalize_social_providers(providers: Optional[list]) -> Optional[list]:
+        if providers is None:
+            return None
+        try:
+            return normalize_social_provider_list(providers)
+        except ValidationError as exc:
+            raise SystemAdminServiceError(exc.messages[0])
+
     @staticmethod
     def _validate_referral_settings(*, allows_referrals: bool, registration_open: bool) -> None:
         if allows_referrals and not registration_open:
@@ -41,6 +52,9 @@ class SystemAdminService:
         self._validate_referral_settings(
             allows_referrals=kwargs.get("allows_referrals", False),
             registration_open=kwargs.get("registration_open", True),
+        )
+        kwargs["allowed_social_providers"] = self._normalize_social_providers(
+            kwargs.get("allowed_social_providers", [])
         )
 
         final_slug = self._unique_slug(slug or clean_name)
@@ -76,8 +90,6 @@ class SystemAdminService:
         description: Optional[str] = None,
         logo_url: Optional[str] = None,
         website: Optional[str] = None,
-        required_identifier_types: Optional[list] = None,
-        allowed_login_identifier_types: Optional[list] = None,
         password_type: Optional[str] = None,
         allow_password_login: Optional[bool] = None,
         allow_passwordless_login: Optional[bool] = None,
@@ -86,6 +98,7 @@ class SystemAdminService:
         passwordless_only: Optional[bool] = None,
         allowed_social_providers: Optional[list] = None,
         registration_open: Optional[bool] = None,
+        auto_login_after_registration: Optional[bool] = None,
         requires_approval: Optional[bool] = None,
         allows_referrals: Optional[bool] = None,
         referral_reward_amount = None,
@@ -115,12 +128,6 @@ class SystemAdminService:
         if website is not None:
             system.website = website
             updated.append("website")
-        if required_identifier_types is not None:
-            system.required_identifier_types = required_identifier_types
-            updated.append("required_identifier_types")
-        if allowed_login_identifier_types is not None:
-            system.allowed_login_identifier_types = allowed_login_identifier_types
-            updated.append("allowed_login_identifier_types")
         if password_type is not None:
             system.password_type = password_type
             updated.append("password_type")
@@ -140,11 +147,14 @@ class SystemAdminService:
             system.passwordless_only = passwordless_only
             updated.append("passwordless_only")
         if allowed_social_providers is not None:
-            system.allowed_social_providers = allowed_social_providers
+            system.allowed_social_providers = self._normalize_social_providers(allowed_social_providers)
             updated.append("allowed_social_providers")
         if registration_open is not None:
             system.registration_open = registration_open
             updated.append("registration_open")
+        if auto_login_after_registration is not None:
+            system.auto_login_after_registration = auto_login_after_registration
+            updated.append("auto_login_after_registration")
         if requires_approval is not None:
             system.requires_approval = requires_approval
             updated.append("requires_approval")
@@ -285,7 +295,6 @@ class SystemAdminService:
         access_token_ttl: int = 0,
         refresh_token_ttl: int = 0,
         id_token_ttl: int = 0,
-        override_allowed_login_identifier_types=None,
         override_allow_passwordless_login=None,
         override_allow_magic_link_login=None,
         override_allow_social_login=None,
@@ -315,11 +324,10 @@ class SystemAdminService:
             access_token_ttl=access_token_ttl,
             refresh_token_ttl=refresh_token_ttl,
             id_token_ttl=id_token_ttl,
-            override_allowed_login_identifier_types=override_allowed_login_identifier_types,
             override_allow_passwordless_login=override_allow_passwordless_login,
             override_allow_magic_link_login=override_allow_magic_link_login,
             override_allow_social_login=override_allow_social_login,
-            override_allowed_social_providers=override_allowed_social_providers,
+            override_allowed_social_providers=self._normalize_social_providers(override_allowed_social_providers),
             client_secret_hash=secret_hash,
             is_active=is_active,
         )
@@ -351,7 +359,6 @@ class SystemAdminService:
         access_token_ttl: Optional[int] = None,
         refresh_token_ttl: Optional[int] = None,
         id_token_ttl: Optional[int] = None,
-        override_allowed_login_identifier_types=None,
         override_allow_passwordless_login=None,
         override_allow_magic_link_login=None,
         override_allow_social_login=None,
@@ -386,9 +393,6 @@ class SystemAdminService:
         if id_token_ttl is not None:
             client.id_token_ttl = id_token_ttl
             updated.append("id_token_ttl")
-        if override_allowed_login_identifier_types is not None:
-            client.override_allowed_login_identifier_types = override_allowed_login_identifier_types
-            updated.append("override_allowed_login_identifier_types")
         if override_allow_passwordless_login is not None:
             client.override_allow_passwordless_login = override_allow_passwordless_login
             updated.append("override_allow_passwordless_login")
@@ -399,7 +403,9 @@ class SystemAdminService:
             client.override_allow_social_login = override_allow_social_login
             updated.append("override_allow_social_login")
         if override_allowed_social_providers is not None:
-            client.override_allowed_social_providers = override_allowed_social_providers
+            client.override_allowed_social_providers = self._normalize_social_providers(
+                override_allowed_social_providers
+            )
             updated.append("override_allowed_social_providers")
 
         if updated:

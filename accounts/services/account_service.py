@@ -1,28 +1,32 @@
 import secrets
-import bcrypt
 from datetime import timedelta
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple
 
+import bcrypt
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
+from accounts.identifier_utils import IdentifierNormaliser
 from accounts.models import (
-    User,
-    UserIdentifier,
+    Gender,
+    IdentifierType,
+    SocialAccount,
     SystemUser,
     SystemUserStatus,
-    SocialAccount,
-    Gender,
+    User,
 )
-from accounts.identifier_utils import IdentifierNormaliser
+from accounts.services.identifier_verification_service import (
+    IdentifierVerificationError,
+    IdentifierVerificationService,
+)
 from accounts.services.referral_service import ReferralService, ReferralServiceError
+from audit.models import AuditEventType, AuditLog
 from base.models import Country, Realm
-from organizations.models import Organization, Branch
+from organizations.models import Branch, Organization
 from permissions.models import Role
-from sso.models import SSOSession, SSOSessionSystemAccess
-from sso.models import UserMFA
 from systems.models import System
-from audit.models import AuditLog, AuditEventType
+from utils.social_providers import normalize_social_provider
 
 
 class AccountServiceError(Exception):
@@ -38,10 +42,6 @@ class SelfRegistrationError(AccountServiceError):
 
 
 class RegistrationClosedError(SelfRegistrationError):
-    pass
-
-
-class IdentifierConflictError(SelfRegistrationError):
     pass
 
 
@@ -76,6 +76,7 @@ class AccountService:
     def __init__(self):
         self._normaliser = IdentifierNormaliser()
         self._referral_service = ReferralService()
+        self._identifier_verification_service = IdentifierVerificationService()
 
     @transaction.atomic
     def invite(
@@ -88,6 +89,8 @@ class AccountService:
             raise SystemUserStatusError("User is suspended in this system.")
         if system_user.status == SystemUserStatus.ACTIVE:
             raise SystemUserStatusError("User is already active in this system.")
+        if not system_user.provisioning_email:
+            raise SystemUserStatusError("Provisioning email is required to send an invite.")
 
         raw_token = secrets.token_urlsafe(48)
         token_hash = bcrypt.hashpw(raw_token.encode(), bcrypt.gensalt()).decode()
@@ -96,17 +99,12 @@ class AccountService:
         system_user.claim_token_expires_at = timezone.now() + timedelta(hours=ttl_hours)
         system_user.invited_at = timezone.now()
         system_user.status = SystemUserStatus.INVITED
-
-        # Collision-safe lookup_id
-        while True:
-            lookup_id = secrets.token_urlsafe(16)
-            if not SystemUser.objects.filter(claim_token_lookup_id=lookup_id).exists():
-                system_user.claim_token_lookup_id = lookup_id
-                system_user.save(update_fields=[
-                    "claim_token_hash", "claim_token_lookup_id",
-                    "claim_token_expires_at", "invited_at", "status",
-                ])
-                break
+        system_user.save(update_fields=[
+            "claim_token_hash",
+            "claim_token_expires_at",
+            "invited_at",
+            "status",
+        ])
 
         self._audit(
             AuditEventType.SYSTEM_USER_INVITED,
@@ -114,42 +112,28 @@ class AccountService:
             subject=system_user,
             payload={
                 "system": system_user.system.name,
-                "provisioning_email": system_user.provisioning_email,
-                "provisioning_phone": system_user.provisioning_phone,
-                "expires_hours": ttl_hours,
+                "provisioning_email": system_user.provisioning_email
             },
         )
-        return lookup_id, raw_token
+
+        return system_user.claim_token_lookup_id, raw_token
 
     @transaction.atomic
     def provision_system_user(
             self,
             provisioned_by: SystemUser,
             system: System,
-            country: Country,
+            country: Optional[Country],
             role: Role,
             provisioning_email: str = "",
             organization: Optional[Organization] = None,
             all_branches: bool = True,
-            branch_grants: Optional[List[Branch]] = None,
-            provisioning_phone: str = "",
-            provisioning_national_id: str = "",
-            first_name: str = "",
-            last_name: str = "",
-            middle_name: str = "",
-            display_name: str = "",
+            branch_grants: Optional[list[Branch]] = None,
             external_ref: str = "",
-            metadata: dict = None,
+            metadata: Optional[dict] = None,
     ) -> SystemUser:
-        if not system.available_countries.filter(id=country.id).exists():
-            raise ProvisionSystemUserError(
-                f"{system.name} is not available in {country.name}."
-            )
-
-        if not any([provisioning_email, provisioning_phone, provisioning_national_id]):
-            raise ProvisionSystemUserError(
-                "At least one provisioning identifier (email, phone, or national ID) must be provided."
-            )
+        if not provisioning_email:
+            raise ProvisionSystemUserError("Provisioning email is required.")
 
         system_user = SystemUser.objects.create(
             user=None,
@@ -158,240 +142,164 @@ class AccountService:
             role=role,
             organization=organization,
             status=SystemUserStatus.PENDING,
-            provisioning_email=provisioning_email,
-            provisioning_phone=provisioning_phone,
-            provisioning_national_id=provisioning_national_id,
-            first_name=first_name,
-            last_name=last_name,
-            middle_name=middle_name,
-            display_name=display_name,
-            external_ref=external_ref,
-            metadata=metadata or {},
+            provisioning_email=provisioning_email.strip().lower(),
             provisioned_by=provisioned_by,
             all_branches=all_branches,
+            external_ref=external_ref,
+            metadata=metadata or {},
         )
-
         if branch_grants and not all_branches:
             system_user.branch_access.set(branch_grants)
 
         self._referral_service.ensure_referral_code(system_user)
-
-        lookup_id, raw_token = self.invite(system_user=system_user, invited_by=provisioned_by)
-
-        self._send_claim_notification(
-            system_user=system_user,
-            lookup_id=lookup_id,
-            raw_token=raw_token,
-            invited_by=provisioned_by,
-        )
+        self.invite(system_user=system_user, invited_by=provisioned_by)
 
         self._audit(
             AuditEventType.SYSTEM_USER_CREATED,
             actor_system_user=provisioned_by,
             subject=system_user,
-            payload={
-                "system": system.name,
-                "country": country.code,
-                "organization": organization.name if organization else None,
-                "role": role.name,
-                "provisioning_email": provisioning_email,
-                "invite_sent": True,
-            },
+            payload={"system": system.name},
         )
+
         return system_user
 
-    @staticmethod
-    def find_system_user_for_claim(lookup_id: str, raw_token: str) -> SystemUser:
-        try:
-            su = SystemUser.objects.select_related("user", "system").get(
-                claim_token_lookup_id=lookup_id,
-                status=SystemUserStatus.INVITED,
+    def inspect_claim(self, lookup_id: str, token: str) -> dict:
+        su = self._get_claimable_system_user(lookup_id, token)
+
+        existing_user = self._find_user_by_email(su.provisioning_email, su.system.realm)
+
+        existing_user_details = {
+            "first_name": existing_user.first_name,
+            "last_name": existing_user.last_name,
+            "phone_number": self._mask_phone(existing_user.phone_number),
+            "email": self._mask_email(existing_user.email),
+            "system_users": list(
+                SystemUser.objects
+                .filter(user=existing_user, status=SystemUserStatus.ACTIVE)
+                .select_related("system", "organization", "role", "country")
+                .annotate(
+                    system_name=F("system__name"),
+                    organization_name=F("organization__name"),
+                    role_name=F("role__name"),
+                    country_name=F("country__name"),
+                    last_login=F("last_login_at"),
+                )
+                .values(
+                    "system_name",
+                    "organization_name",
+                    "role_name",
+                    "country_name",
+                    "last_login",
+                )
             )
-        except SystemUser.DoesNotExist:
-            raise InvalidClaimTokenError("Invalid or expired invite link.")
+        } if existing_user else None
 
-        if not bcrypt.checkpw(raw_token.encode(), su.claim_token_hash.encode()):
-            raise InvalidClaimTokenError("Invalid or expired invite link.")
-
-        if not su.is_claimable:
-            raise ClaimExpiredError("This invite link has expired. Please request a new one.")
-
-        return su
-
-    @transaction.atomic
-    def inspect_claim(self, lookup_id: str, raw_token: str) -> dict:
-        su = self.find_system_user_for_claim(lookup_id, raw_token)
-        system = su.system
-
-        if su.user is not None:
-            raise ClaimError("This invitation has already been claimed.")
-
-        payload = {
-            "system_user_id": str(su.id),
-            "system_name": su.system.name,
-            "country_name": su.country.name,
-            "organization_name": su.organization.name if su.organization else None,
-            "role_name": su.role.name,
-            "first_name": su.first_name,
-            "last_name": su.last_name,
+        return {
+            "lookup_id": su.claim_token_lookup_id,
+            "system": su.system.name,
+            "organization": su.organization.name if su.organization_id else None,
+            "role": su.role.name,
+            "country": su.country.code if su.country_id else None,
+            "status": su.status,
+            "provisioning_email": self._mask_email(su.provisioning_email),
+            "existing_account_found": existing_user is not None,
+            "existing_user_details": existing_user_details,
+            "available_action": "link" if existing_user else "new",
+            "password_needed": (
+                    su.system.allow_password_login
+                    and su.system.password_type == System.PasswordType.PASSWORD
+                    and (not existing_user.has_usable_password() if existing_user else True)
+            ),
+            "pin_needed": (
+                    su.system.allow_password_login
+                    and su.system.password_type == System.PasswordType.PIN
+                    and (not existing_user.pin if existing_user else True)
+            )
         }
-
-        existing_user: User | None = self._resolve_existing_user(su, system.realm)
-        auth_requirement = self._resolve_claim_auth_requirement(system)
-        required_identifier_types = system.required_identifier_types or []
-
-        provided_in_provisioning = []
-        if su.provisioning_email:
-            provided_in_provisioning.append("email")
-        if su.provisioning_phone:
-            provided_in_provisioning.append("phone")
-        if su.provisioning_national_id:
-            provided_in_provisioning.append("national_id")
-
-        additional_required = [t for t in required_identifier_types if t not in provided_in_provisioning]
-
-        if existing_user:
-            mask_map = {
-                "email": self._mask_email,
-                "phone": self._mask_phone,
-                "national_id": self._mask_national_id,
-                "username": self._mask_username,
-            }
-            existing_user_details = {
-                ident.identifier_type: mask_map[ident.identifier_type](ident.value_normalised)
-                for ident in existing_user.identifiers.all()
-            }
-            user_has = {ident.identifier_type for ident in existing_user.identifiers.all()}
-            missing_for_link = [t for t in required_identifier_types if t not in user_has]
-
-            payload.update({
-                "new_user": False,
-                "can_link": True,
-                "can_create_separate": True,
-                "existing_user_details": existing_user_details,
-                "provisioning_email": self._mask_email(su.provisioning_email) if su.provisioning_email else None,
-                "provisioning_phone": self._mask_phone(su.provisioning_phone) if su.provisioning_phone else None,
-                "provisioning_national_id": self._mask_national_id(su.provisioning_national_id)
-                if su.provisioning_national_id else None,
-                "link_requires_additional_identifiers": missing_for_link,
-                "separate_requires": auth_requirement,
-                "separate_required_identifiers": required_identifier_types,
-            })
-        else:
-            payload.update({
-                "new_user": True,
-                "can_link": False,
-                "can_create_separate": False,
-                "requires": auth_requirement,
-                "additional_required_identifiers": additional_required,
-            })
-        return payload
-
-    @staticmethod
-    def _resolve_claim_auth_requirement(system: System) -> dict:
-        if system.passwordless_only:
-            return {"type": "none"}
-        if system.password_type == System.PasswordType.PIN:
-            return {"type": "pin"}
-        if system.allow_password_login:
-            return {"type": "password"}
-        return {"type": "none"}
 
     @transaction.atomic
     def claim_user(
-        self,
-        claim_token_lookup_id: str,
-        claim_token: str,
-        claim_action: str = "link",
-        password: Optional[str] = None,
-        pin: Optional[str] = None,
-        email: Optional[str] = None,
-        phone: Optional[str] = None,
-        national_id: Optional[str] = None,
-        username: Optional[str] = None,
+            self,
+            lookup_id: str,
+            token: str,
+            claim_action: str,
+            password: Optional[str] = None,
+            pin: Optional[str] = None,
+            phone_number: Optional[str] = None,
+            first_name: str = "",
+            last_name: str = "",
+            middle_name: str = "",
+            display_name: str = "",
+            date_of_birth=None,
+            gender: str = Gender.OTHER,
+            country: Optional[Country] = None,
+            email_verification_id: Optional[str] = None,
+            phone_verification_id: Optional[str] = None,
+            ip_address: str = "",
     ) -> SystemUser:
-        su = self.find_system_user_for_claim(claim_token_lookup_id, claim_token)
+        su = self._get_claimable_system_user(lookup_id, token)
         system = su.system
-
-        if su.user is not None:
-            raise ClaimError("This invitation has already been claimed.")
-
-        existing_user: User | None = self._resolve_existing_user(su, system.realm)
-
-        provisioned_identifiers = {
-            "email": su.provisioning_email or email,
-            "phone": su.provisioning_phone or phone,
-            "national_id": su.provisioning_national_id or national_id,
-            "username": username,
-        }
+        existing_user = self._find_user_by_email(su.provisioning_email, system.realm)
 
         if claim_action == "link":
             if not existing_user:
-                raise ClaimError("Cannot link: no existing user account matches the provisioning details.")
-            if existing_user.realm != system.realm:
-                raise ClaimError("User realm and system realm do not match.")
+                raise ClaimError("No existing account was found for this invite. Use 'new' instead.")
 
             user = existing_user
-            for required_type in (system.required_identifier_types or []):
-                if not UserIdentifier.objects.filter(user=user, identifier_type=required_type).exists():
-                    value = provisioned_identifiers.get(required_type)
-                    if not value:
-                        raise ClaimError(
-                            f"Cannot link: {required_type} is required by this system but was not provided."
-                        )
-                    self._check_identifier_available(realm=system.realm, value=value, identifier_type=required_type)
-                    self.add_identifier(
-                        user=user,
-                        identifier_type=required_type,
-                        value=value,
-                        system=system,
-                        require_verification=False,
-                    )
+            self._ensure_credentials_if_needed(user, system, password, pin)
 
-        elif claim_action in ("new", "separate"):
-            if claim_action == "new" and existing_user:
-                raise ClaimError("An existing account was found. Use 'link' or 'separate' instead.")
+        elif claim_action == "new":
+            if existing_user:
+                raise ClaimError("An existing account was found. Use 'link' instead.")
 
-            if claim_action == "separate":
-                user_identifiers = {
-                    "email": email,
-                    "phone": phone,
-                    "national_id": national_id,
-                    "username": username,
-                }
-            else:
-                user_identifiers = provisioned_identifiers
+            self._validate_required_profile(first_name, last_name, date_of_birth, gender)
 
-            for required_type in (system.required_identifier_types or []):
-                value = user_identifiers.get(required_type)
-                if not value:
-                    raise ClaimError(f"This system requires your {required_type} to register.")
-                self._check_identifier_available(realm=system.realm, value=value, identifier_type=required_type)
+            if not phone_number:
+                raise ClaimError("Phone number is required.")
+
+            if self._find_user_by_phone(phone_number, system.realm):
+                raise ClaimError("Phone number already exists.")
+
+            verified = self._validated_contact_verifications(
+                email=su.provisioning_email,
+                phone_number=phone_number,
+                email_verification_id=email_verification_id,
+                phone_verification_id=phone_verification_id,
+                require_email_verification=False,
+            )
 
             password, pin = self._resolve_credentials(system, password, pin)
+
             user = User.objects.create_user(
                 realm=system.realm,
-                email=user_identifiers.get("email"),
-                phone_number=user_identifiers.get("phone"),
-                username=user_identifiers.get("username"),
-                national_id=user_identifiers.get("national_id"),
+                email=su.provisioning_email,
+                phone_number=phone_number,
                 password=password,
                 pin=pin,
-                primary_country=su.country,
-                added_by_system=system,
+                primary_country=country or su.country,
+                first_name=first_name,
+                last_name=last_name,
+                middle_name=middle_name,
+                display_name=display_name or f"{first_name} {last_name}".strip(),
+                date_of_birth=date_of_birth,
+                gender=gender,
             )
+
+            self._apply_verified_contacts(user, verified)
+
         else:
-            raise ClaimError("Invalid claim_action. Must be one of: 'link', 'new', 'separate'.")
+            raise ClaimError("Invalid claim_action. Must be 'link' or  'new'.")
+
+        self._mark_email_verified(user, su.provisioning_email)
 
         su.user = user
         su.status = SystemUserStatus.ACTIVE
         su.claimed_at = timezone.now()
         su.claim_token_hash = ""
-        su.claim_token_lookup_id = ""
         su.claim_token_expires_at = None
         su.save(update_fields=[
             "user", "status", "claimed_at", "claim_token_hash",
-            "claim_token_lookup_id", "claim_token_expires_at",
+            "claim_token_expires_at"
         ])
 
         self._audit(
@@ -399,101 +307,84 @@ class AccountService:
             actor_user=user,
             subject=su,
             payload={"action": claim_action, "system": system.name},
+            ip=ip_address,
         )
+
         return su
 
     @transaction.atomic
     def self_registration(
-        self,
-        system: System,
-        role: Role,
-        first_name: str,
-        last_name: str,
-        middle_name: str = "",
-        display_name: str = "",
-        date_of_birth=None,
-        gender: str = Gender.OTHER,
-        email: Optional[str] = None,
-        phone_number: Optional[str] = None,
-        username: Optional[str] = None,
-        national_id: Optional[str] = None,
-        password: Optional[str] = None,
-        pin: Optional[str] = None,
-        primary_country: Optional[Country] = None,
-        organization: Optional[Organization] = None,
-        referral_code: Optional[str] = None,
-        ip_address: str = "",
+            self,
+            system: System,
+            role: Role,
+            first_name: str,
+            last_name: str,
+            middle_name: str = "",
+            display_name: str = "",
+            date_of_birth=None,
+            gender: str = Gender.OTHER,
+            email: Optional[str] = None,
+            phone_number: Optional[str] = None,
+            password: Optional[str] = None,
+            pin: Optional[str] = None,
+            email_verification_id: Optional[str] = None,
+            phone_verification_id: Optional[str] = None,
+            primary_country: Optional[Country] = None,
+            referral_code: Optional[str] = None,
+            ip_address: str = "",
     ) -> Tuple[User, SystemUser]:
         if not system.registration_open:
             raise RegistrationClosedError("This system does not allow self-registration.")
 
-        submitted = {k: v for k, v in {
-            "email": email,
-            "phone": phone_number,
-            "username": username,
-            "national_id": national_id,
-        }.items() if v and v.strip()}
+        self._validate_required_profile(first_name, last_name, date_of_birth, gender)
 
-        for required_type in (system.required_identifier_types or []):
-            if required_type not in submitted:
-                raise SelfRegistrationError(f"This system requires your {required_type} to register.")
+        email, phone_number = self._require_email_and_phone(email, phone_number)
+
+        verified = self._validated_contact_verifications(
+            email=email,
+            phone_number=phone_number,
+            email_verification_id=email_verification_id,
+            phone_verification_id=phone_verification_id,
+        )
 
         password, pin = self._resolve_credentials(system, password, pin)
 
-        existing_user, existing_identifier_type = self._find_existing_user_for_registration(
+        existing_user, matched_on = self._find_existing_user_for_registration(
             realm=system.realm,
             email=email,
-            phone_number=phone_number,
-            national_id=national_id,
-            username=username,
+            phone_number=phone_number
         )
-
-        if existing_user and existing_identifier_type:
-            if SystemUser.objects.filter(
-                user=existing_user, system=system, status=SystemUserStatus.ACTIVE
-            ).exists():
+        if existing_user:
+            if SystemUser.objects.filter(user=existing_user, system=system, status=SystemUserStatus.ACTIVE).exists():
                 raise SelfRegistrationError(
-                    f"An account with this {existing_identifier_type} is already registered in this system."
+                    f"An account with this {matched_on} is already registered in this system."
                 )
-            raise LinkAccountRequired(
-                existing_user=existing_user,
-                matched_on=existing_identifier_type,
-            )
+            raise LinkAccountRequired(existing_user=existing_user, matched_on=matched_on)
 
         user = User.objects.create_user(
             realm=system.realm,
             email=email,
             phone_number=phone_number,
-            username=username,
-            national_id=national_id,
             password=password,
             pin=pin,
             primary_country=primary_country,
-            added_by_system=system,
+            first_name=first_name,
+            last_name=last_name,
+            middle_name=middle_name,
+            display_name=display_name or f"{first_name} {last_name}".strip(),
+            date_of_birth=date_of_birth,
+            gender=gender,
         )
+
+        self._apply_verified_contacts(user, verified)
 
         system_user = self._create_system_user_record(
             user=user,
             system=system,
             role=role,
-            organization=organization,
             primary_country=primary_country,
-            first_name=first_name,
-            last_name=last_name,
-            middle_name=middle_name,
-            display_name=display_name,
-            date_of_birth=date_of_birth,
-            gender=gender,
         )
-
-        if referral_code:
-            try:
-                self._referral_service.attach_referral(
-                    referred=system_user,
-                    referral_code=referral_code,
-                )
-            except ReferralServiceError as e:
-                raise SelfRegistrationError(str(e))
+        self._attach_referral_if_present(system_user, referral_code)
 
         self._audit(
             AuditEventType.USER_CREATED,
@@ -501,80 +392,33 @@ class AccountService:
             ip=ip_address,
             payload={"system": system.name, "via": "self_registration"},
         )
+
         return user, system_user
 
     @transaction.atomic
     def self_registration_link(
-        self,
-        existing_user: User,
-        system: System,
-        role: Role,
-        first_name: str,
-        last_name: str,
-        middle_name: str = "",
-        display_name: str = "",
-        date_of_birth=None,
-        gender: str = Gender.OTHER,
-        organization: Optional[Organization] = None,
-        primary_country: Optional[Country] = None,
-        referral_code: Optional[str] = None,
-        email: Optional[str] = None,
-        phone_number: Optional[str] = None,
-        username: Optional[str] = None,
-        national_id: Optional[str] = None,
-        ip_address: str = "",
+            self,
+            existing_user: User,
+            system: System,
+            role: Role,
+            primary_country: Optional[Country] = None,
+            referral_code: Optional[str] = None,
+            ip_address: str = "",
     ) -> Tuple[User, SystemUser]:
-        if existing_user.realm != system.realm:
+        if existing_user.realm_id and existing_user.realm_id != system.realm_id:
             raise SelfRegistrationError("User realm and system realm do not match.")
+
         if SystemUser.objects.filter(user=existing_user, system=system, status=SystemUserStatus.ACTIVE).exists():
             raise SelfRegistrationError("This account is already registered in this system.")
-
-        supplied = {
-            "email": email,
-            "phone": phone_number,
-            "username": username,
-            "national_id": national_id,
-        }
-
-        for required_type in (system.required_identifier_types or []):
-            if not UserIdentifier.objects.filter(user=existing_user, identifier_type=required_type).exists():
-                value = supplied.get(required_type)
-                if not value:
-                    raise SelfRegistrationError(
-                        f"Your account does not have a {required_type}. "
-                        f"Please provide one to complete registration."
-                    )
-                self._check_identifier_available(realm=system.realm, value=value, identifier_type=required_type)
-                self.add_identifier(
-                    user=existing_user,
-                    identifier_type=required_type,
-                    value=value,
-                    system=system,
-                    require_verification=False,
-                )
 
         system_user = self._create_system_user_record(
             user=existing_user,
             system=system,
             role=role,
-            organization=organization,
             primary_country=primary_country,
-            first_name=first_name,
-            last_name=last_name,
-            middle_name=middle_name,
-            display_name=display_name,
-            date_of_birth=date_of_birth,
-            gender=gender,
         )
 
-        if referral_code:
-            try:
-                self._referral_service.attach_referral(
-                    referred=system_user,
-                    referral_code=referral_code,
-                )
-            except ReferralServiceError as e:
-                raise SelfRegistrationError(str(e))
+        self._attach_referral_if_present(system_user, referral_code)
 
         self._audit(
             AuditEventType.USER_LINKED_TO_SYSTEM,
@@ -582,171 +426,288 @@ class AccountService:
             ip=ip_address,
             payload={"system": system.name, "via": "self_registration_link"},
         )
+
         return existing_user, system_user
 
     @transaction.atomic
-    def update_profile(
-        self,
-        system_user: SystemUser,
-        **fields,
-    ) -> SystemUser:
-        allowed = {
-            "first_name", "last_name", "middle_name", "display_name",
-            "date_of_birth", "gender", "profile_photo_url",
-            "metadata", "external_ref",
-        }
-        updated = [k for k, v in fields.items() if k in allowed]
-        for key in updated:
-            setattr(system_user, key, fields[key])
+    def self_registration_social(
+            self,
+            system: System,
+            role: Role,
+            provider: str,
+            uid: str,
+            first_name: str,
+            last_name: str,
+            middle_name: str = "",
+            display_name: str = "",
+            date_of_birth=None,
+            gender: str = Gender.OTHER,
+            email: Optional[str] = None,
+            phone_number: Optional[str] = None,
+            access_token: str = "",
+            refresh_token: str = "",
+            extra_data: Optional[dict] = None,
+            email_verification_id: Optional[str] = None,
+            phone_verification_id: Optional[str] = None,
+            primary_country: Optional[Country] = None,
+            referral_code: Optional[str] = None,
+            ip_address: str = "",
+    ) -> Tuple[User, SystemUser]:
+        if not system.registration_open:
+            raise RegistrationClosedError("This system does not allow self-registration.")
 
-        if updated:
-            system_user.save(update_fields=updated)
-            self._audit(
-                AuditEventType.USER_UPDATED,
-                actor_user=system_user.user,
-                subject=system_user,
-                payload={"updated_fields": updated},
-            )
-        return system_user
+        self._validate_required_profile(first_name, last_name, date_of_birth, gender)
+        provider = self._validate_social_provider_for_system(system, provider)
 
-    @transaction.atomic
-    def add_identifier(
-        self,
-        user: User,
-        identifier_type: str,
-        value: str,
-        system: Optional[System] = None,
-        require_verification: bool = True,
-        ip_address: str = "",
-    ) -> UserIdentifier:
-        self._check_identifier_available(
-            value=value,
-            identifier_type=identifier_type,
-            exclude_user=user,
-            realm=user.realm,
+        uid = (uid or "").strip()
+        if not uid:
+            raise SelfRegistrationError("Social account uid is required.")
+
+        email, phone_number = self._require_email_and_phone(email, phone_number)
+
+        verified = self._validated_contact_verifications(
+            email=email,
+            phone_number=phone_number,
+            email_verification_id=email_verification_id,
+            phone_verification_id=phone_verification_id,
         )
 
-        normalised = self._normaliser.normalise(value, identifier_type)
-        identifier = UserIdentifier.objects.create(
-            user=user,
-            realm=user.realm,
-            identifier_type=identifier_type,
-            value=value,
-            value_normalised=normalised,
-            is_primary=False,
-            is_verified=not require_verification,
-            verified_at=timezone.now() if not require_verification else None,
-            added_by_system=system,
-        )
+        social = SocialAccount.objects.select_related("user").filter(
+            provider=provider,
+            uid=uid,
+        ).first()
+        if social:
+            if SystemUser.objects.filter(
+                    user=social.user,
+                    system=system,
+                    status=SystemUserStatus.ACTIVE
+            ).exists():
+                raise SelfRegistrationError("This social account is already registered in this system.")
 
-        self._audit(
-            AuditEventType.IDENTIFIER_ADDED,
-            actor_user=user,
-            ip=ip_address,
-            identifier_type=identifier_type,
-            payload={"type": identifier_type, "requires_verification": require_verification},
-        )
-        return identifier
-
-    @transaction.atomic
-    def verify_identifier(self, identifier: UserIdentifier, ip_address: str = "") -> UserIdentifier:
-        identifier.is_verified = True
-        identifier.verified_at = timezone.now()
-        identifier.save(update_fields=["is_verified", "verified_at"])
-
-        self._audit(
-            AuditEventType.IDENTIFIER_VERIFIED,
-            actor_user=identifier.user,
-            ip=ip_address,
-            identifier_type=identifier.identifier_type,
-            payload={"type": identifier.identifier_type},
-        )
-        return identifier
-
-    @transaction.atomic
-    def promote_identifier_to_primary(self, new_identifier: UserIdentifier, ip_address: str = "") -> UserIdentifier:
-        if not new_identifier.is_verified:
-            raise ManageIdentifierError("Cannot promote an unverified identifier to primary.")
-
-        user = new_identifier.user
-        old_primary = UserIdentifier.objects.filter(
-            user=user,
-            identifier_type=new_identifier.identifier_type,
-            is_primary=True,
-        ).exclude(id=new_identifier.id).first()
-
-        if old_primary:
-            old_primary.disassociate(reason="superseded", disassociated_by=user)
-            self._suspend_mfa_for_identifier(old_primary)
-            self._flag_sessions_for_reauth(user, f"{new_identifier.identifier_type} changed")
-
-        new_identifier.is_primary = True
-        new_identifier.save(update_fields=["is_primary"])
-
-        self._audit(
-            AuditEventType.IDENTIFIER_PROMOTED,
-            actor_user=user,
-            ip=ip_address,
-            identifier_type=new_identifier.identifier_type,
-            payload={"action": "promoted_to_primary"},
-        )
-        return new_identifier
-
-    @transaction.atomic
-    def disassociate_identifier(
-        self,
-        identifier: UserIdentifier,
-        reason: str,
-        disassociated_by: Optional[User] = None,
-        ip_address: str = "",
-    ) -> None:
-        user = identifier.user
-        remaining = UserIdentifier.objects.filter(user=user).exclude(id=identifier.id).count()
-        if remaining == 0:
-            raise ManageIdentifierError("Cannot remove the only identifier on this account.")
-
-        was_primary = identifier.is_primary
-        identifier.disassociate(reason=reason, disassociated_by=disassociated_by)
-        self._suspend_mfa_for_identifier(identifier)
-
-        if was_primary:
-            self._flag_sessions_for_reauth(
-                user, f"Primary {identifier.identifier_type} removed"
+            return self.self_registration_social_link(
+                existing_user=social.user,
+                system=system,
+                role=role,
+                provider=provider,
+                uid=uid,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                extra_data=extra_data,
+                primary_country=primary_country,
+                referral_code=referral_code,
+                ip_address=ip_address,
             )
 
+        existing_user, matched_on = self._find_existing_user_for_registration(
+            realm=system.realm,
+            email=email,
+            phone_number=phone_number
+        )
+        if existing_user:
+            if SystemUser.objects.filter(
+                    user=existing_user,
+                    system=system,
+                    status=SystemUserStatus.ACTIVE
+            ).exists():
+                raise SelfRegistrationError(
+                    f"An account with this {matched_on} is already registered in this system."
+                )
+            raise LinkAccountRequired(existing_user=existing_user, matched_on=matched_on)
+
+        user = User.objects.create_user(
+            realm=system.realm,
+            email=email,
+            phone_number=phone_number,
+            primary_country=primary_country,
+            first_name=first_name,
+            last_name=last_name,
+            middle_name=middle_name,
+            display_name=display_name or f"{first_name} {last_name}".strip(),
+            date_of_birth=date_of_birth,
+            gender=gender,
+        )
+
+        self._apply_verified_contacts(user, verified)
+
+        self.link_social_account(
+            user=user,
+            provider=provider,
+            uid=uid,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            extra_data=extra_data,
+        )
+
+        system_user = self._create_system_user_record(
+            user=user,
+            system=system,
+            role=role,
+            primary_country=primary_country,
+        )
+
+        self._attach_referral_if_present(system_user, referral_code)
+
         self._audit(
-            AuditEventType.IDENTIFIER_DISASSOCIATED,
-            actor_user=disassociated_by or user,
+            AuditEventType.USER_CREATED,
+            actor_user=user,
             ip=ip_address,
-            identifier_type=identifier.identifier_type,
             payload={
-                "type": identifier.identifier_type,
-                "reason": reason,
-                "was_primary": was_primary
+                "system": system.name,
+                "via": "self_registration_social",
+                "provider": provider
             },
         )
 
+        return user, system_user
+
+    @transaction.atomic
+    def self_registration_social_link(
+            self,
+            existing_user: User,
+            system: System,
+            role: Role,
+            provider: str,
+            uid: str,
+            access_token: str = "",
+            refresh_token: str = "",
+            extra_data: Optional[dict] = None,
+            primary_country: Optional[Country] = None,
+            referral_code: Optional[str] = None,
+            ip_address: str = "",
+    ) -> Tuple[User, SystemUser]:
+        provider = self._validate_social_provider_for_system(system, provider)
+        uid = (uid or "").strip()
+        if not uid:
+            raise SelfRegistrationError("Social account uid is required.")
+
+        if existing_user.realm_id and existing_user.realm_id != system.realm_id:
+            raise SelfRegistrationError("User realm and system realm do not match.")
+
+        if SystemUser.objects.filter(
+                user=existing_user,
+                system=system,
+                status=SystemUserStatus.ACTIVE
+        ).exists():
+            raise SelfRegistrationError("This account is already registered in this system.")
+
+        self.link_social_account(
+            user=existing_user,
+            provider=provider,
+            uid=uid,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            extra_data=extra_data,
+        )
+
+        system_user = self._create_system_user_record(
+            user=existing_user,
+            system=system,
+            role=role,
+            primary_country=primary_country,
+        )
+
+        self._attach_referral_if_present(system_user, referral_code)
+
+        self._audit(
+            AuditEventType.USER_LINKED_TO_SYSTEM,
+            actor_user=existing_user,
+            ip=ip_address,
+            payload={
+                "system": system.name,
+                "via": "self_registration_social_link",
+                "provider": provider
+            },
+        )
+
+        return existing_user, system_user
+
+    @transaction.atomic
+    def update_profile(self, system_user: SystemUser, **fields) -> SystemUser:
+        user = system_user.user
+        if not user:
+            raise SelfRegistrationError("No user is linked to this system profile.")
+
+        user_fields = {
+            "first_name",
+            "last_name",
+            "middle_name",
+            "display_name",
+            "date_of_birth",
+            "gender",
+            "profile_photo_url",
+        }
+        updated_user = [key for key in fields if key in user_fields]
+        for key in updated_user:
+            setattr(user, key, fields[key])
+        if updated_user:
+            user.save(update_fields=updated_user)
+
+        updated_system_user = [key for key in fields if key in {"metadata", "external_ref"}]
+        for key in updated_system_user:
+            setattr(system_user, key, fields[key])
+        if updated_system_user:
+            system_user.save(update_fields=updated_system_user)
+
+        self._audit(
+            AuditEventType.USER_UPDATED,
+            actor_user=user,
+            subject=system_user,
+            payload={
+                "updated_user_fields": updated_user,
+                "updated_system_fields": updated_system_user
+            },
+        )
+
+        return system_user
+
+    @transaction.atomic
+    def update_identifier(
+            self,
+            user: User,
+            identifier_type: str,
+            new_value: str,
+            verification_id: str,
+    ) -> None:
+        if not identifier_type in IdentifierType.values:
+            raise ManageIdentifierError("Invalid identifier type.")
+
+        try:
+            verification = self._identifier_verification_service.assert_verified_identifier(
+                identifier_type=identifier_type,
+                value=new_value,
+                verification_id=verification_id,
+            )
+        except IdentifierVerificationError as exc:
+            raise ManageIdentifierError(str(exc))
+        if not verification:
+            raise ManageIdentifierError(f"A verified {identifier_type} is required.")
+
+        if identifier_type == IdentifierType.EMAIL:
+            user.email = new_value
+            user.save(update_fields=["email"])
+
+        elif identifier_type == IdentifierType.PHONE:
+            user.phone_number = new_value
+            user.save(update_fields=["phone"])
+
+        self._apply_verified_contacts(user, {identifier_type: verification})
+
+
     @transaction.atomic
     def suspend_system_user(
-        self,
-        system_user: SystemUser,
-        reason: str,
-        suspended_by: User,
-        ip_address: str = "",
+            self,
+            system_user: SystemUser,
+            reason: str,
+            suspended_by: User,
+            ip_address: str = "",
     ) -> SystemUser:
         if system_user.status == SystemUserStatus.SUSPENDED:
             raise SystemUserStatusError("User is already suspended.")
 
         system_user.suspended_reason = reason
         system_user.suspended_at = timezone.now()
-        system_user.suspended_by = suspended_by
         system_user.status = SystemUserStatus.SUSPENDED
-        system_user.save(update_fields=[
-            "suspended_reason", "suspended_at",
-            "suspended_by", "status"
-        ])
-
-        self._revoke_sessions_for_system(system_user)
+        system_user.save(update_fields=["suspended_reason", "suspended_at", "status"])
 
         self._audit(
             AuditEventType.USER_SUSPENDED,
@@ -755,26 +716,23 @@ class AccountService:
             ip=ip_address,
             payload={"system": system_user.system.name, "reason": reason},
         )
+
         return system_user
 
     @transaction.atomic
     def restore_system_user(
-        self,
-        system_user: SystemUser,
-        restored_by: User,
-        ip_address: str = "",
+            self,
+            system_user: SystemUser,
+            restored_by: User,
+            ip_address: str = "",
     ) -> SystemUser:
         if system_user.status != SystemUserStatus.SUSPENDED:
             raise SystemUserStatusError("User is not suspended.")
 
         system_user.suspended_reason = ""
         system_user.suspended_at = None
-        system_user.suspended_by = None
         system_user.status = SystemUserStatus.ACTIVE
-        system_user.save(update_fields=[
-            "suspended_reason", "suspended_at",
-            "suspended_by", "status"
-        ])
+        system_user.save(update_fields=["suspended_reason", "suspended_at", "status"])
 
         self._audit(
             AuditEventType.USER_RESTORED,
@@ -783,57 +741,37 @@ class AccountService:
             ip=ip_address,
             payload={"system": system_user.system.name},
         )
+
         return system_user
 
     @transaction.atomic
     def link_social_account(
-        self,
-        user: User,
-        provider: str,
-        uid: str,
-        access_token: str = "",
-        refresh_token: str = "",
-        extra_data: dict = None,
+            self,
+            user: User,
+            provider: str,
+            uid: str,
+            access_token: str = "",
+            refresh_token: str = "",
+            extra_data: Optional[dict] = None,
     ) -> SocialAccount:
+        provider = self._validate_social_provider(provider)
+
+        uid = (uid or "").strip()
+        if not uid:
+            raise SelfRegistrationError("Social account uid is required.")
+
         social, _ = SocialAccount.objects.update_or_create(
             provider=provider,
             uid=uid,
             defaults={
                 "user": user,
-                "extra_data": extra_data or {},
                 "access_token": access_token,
                 "refresh_token": refresh_token,
+                "extra_data": extra_data or {},
             },
         )
+
         return social
-
-    @transaction.atomic
-    def get_or_create_user_from_social(
-        self,
-        system: System,
-        provider: str,
-        uid: str,
-        email: str,
-        access_token: str = "",
-        extra_data: dict = None,
-    ) -> Tuple[User, bool]:
-        try:
-            social = SocialAccount.objects.select_related("user").get(
-                provider=provider, uid=uid, user__realm=system.realm
-            )
-            return social.user, False
-        except SocialAccount.DoesNotExist:
-            pass
-
-        try:
-            user = User.objects.get_by_identifier(email, "email", system.realm)
-            created = False
-        except User.DoesNotExist:
-            user = User.objects.create_user(realm=system.realm, email=email)
-            created = True
-
-        self.link_social_account(user, provider, uid, access_token, extra_data=extra_data)
-        return user, created
 
     @staticmethod
     def _resolve_credentials(
@@ -856,166 +794,237 @@ class AccountService:
 
         return password, pin
 
-    @staticmethod
-    def _find_existing_user_for_registration(
-        realm: Realm,
-        email: Optional[str],
-        phone_number: Optional[str],
-        national_id: Optional[str],
-        username: Optional[str],
-    ) -> Tuple[Optional[User], Optional[str]]:
-        checks = [
-            ("email", email),
-            ("national_id", national_id),
-            ("phone", phone_number),
-            ("username", username),
-        ]
-        for id_type, value in checks:
-            if not value:
+    def _validated_contact_verifications(
+            self,
+            email: str,
+            phone_number: str,
+            email_verification_id: Optional[str],
+            phone_verification_id: Optional[str],
+            require_email_verification: bool = True,
+    ) -> dict:
+        verified = {}
+        for contact_type, value, verification_id in (
+            (IdentifierType.EMAIL, email, email_verification_id),
+            (IdentifierType.PHONE, phone_number, phone_verification_id),
+        ):
+            if contact_type == IdentifierType.EMAIL and not require_email_verification:
                 continue
             try:
-                user = User.objects.get_by_identifier(
+                verification = self._identifier_verification_service.assert_verified_identifier(
+                    identifier_type=contact_type,
                     value=value,
-                    identifier_type=id_type,
-                    realm=realm
+                    verification_id=verification_id,
                 )
-                return user, id_type
-            except User.DoesNotExist:
-                continue
+            except IdentifierVerificationError as exc:
+                raise SelfRegistrationError(str(exc))
+
+            if not verification:
+                raise SelfRegistrationError(f"A verified {contact_type} is required.")
+
+            verified[contact_type] = verification
+
+        return verified
+
+    @staticmethod
+    def _mark_email_verified(user: User, email: str) -> None:
+        if user.email != (email or "").strip().lower() or user.email_verified:
+            return
+
+        now = timezone.now()
+        user.email_verified = True
+        user.email_verified_at = now
+        user.save(update_fields=["email_verified", "email_verified_at"])
+
+    def _apply_verified_contacts(self, user: User, verified: dict) -> None:
+        updates = []
+        now = timezone.now()
+
+        if IdentifierType.EMAIL in verified:
+            user.email_verified = True
+            user.email_verified_at = now
+            self._identifier_verification_service.consume_registration_verification(
+                verified[IdentifierType.EMAIL]
+            )
+            updates.extend(["email_verified", "email_verified_at"])
+
+        if IdentifierType.PHONE in verified:
+            user.phone_verified = True
+            user.phone_verified_at = now
+            self._identifier_verification_service.consume_registration_verification(
+                verified[IdentifierType.PHONE]
+            )
+            updates.extend(["phone_verified", "phone_verified_at"])
+
+        if updates:
+            user.save(update_fields=updates)
+
+    @staticmethod
+    def _validate_required_profile(first_name: str, last_name: str, date_of_birth, gender: str) -> None:
+        if not first_name:
+            raise SelfRegistrationError("First name is required.")
+        if not last_name:
+            raise SelfRegistrationError("Last name is required.")
+        if not date_of_birth:
+            raise SelfRegistrationError("Date of birth is required.")
+        if not gender:
+            raise SelfRegistrationError("Gender is required.")
+
+    @staticmethod
+    def _require_email_and_phone(email: Optional[str], phone_number: Optional[str]) -> Tuple[str, str]:
+        email = (email or "").strip().lower()
+        phone_number = (phone_number or "").strip()
+        if not email:
+            raise SelfRegistrationError("Email is required.")
+        if not phone_number:
+            raise SelfRegistrationError("Phone number is required.")
+        return email, phone_number
+
+    @staticmethod
+    def _find_existing_user_for_registration(
+            realm: Realm,
+            email: str,
+            phone_number: str
+    ) -> Tuple[Optional[User], Optional[str]]:
+        try:
+            return (
+                User.objects.get_by_identifier(realm, email, IdentifierType.EMAIL),
+                IdentifierType.EMAIL
+            )
+        except User.DoesNotExist:
+            pass
+        try:
+            return (
+                User.objects.get_by_identifier(realm, phone_number, IdentifierType.PHONE),
+                IdentifierType.PHONE
+            )
+        except User.DoesNotExist:
+            pass
         return None, None
 
     @staticmethod
+    def _find_user_by_email(email: str, realm: Realm) -> Optional[User]:
+        try:
+            return User.objects.get_by_identifier(realm, email, IdentifierType.EMAIL)
+        except User.DoesNotExist:
+            return None
+
+    @staticmethod
+    def _find_user_by_phone(phone_number: str, realm: Realm) -> Optional[User]:
+        try:
+            return User.objects.get_by_identifier(realm, phone_number, IdentifierType.PHONE)
+        except User.DoesNotExist:
+            return None
+
+    @staticmethod
+    def _get_claimable_system_user(lookup_id: str, token: str) -> SystemUser:
+        try:
+            su = (
+                SystemUser.objects
+                .select_related("system", "organization", "country", "role")
+                .get(claim_token_lookup_id=lookup_id)
+            )
+        except SystemUser.DoesNotExist:
+            raise InvalidClaimTokenError("Invite not found.")
+        if not su.claim_token_hash or not su.claim_token_expires_at:
+            raise InvalidClaimTokenError("Invite token is invalid.")
+        if su.claim_token_expires_at <= timezone.now():
+            raise ClaimExpiredError("Invite token has expired.")
+        if not bcrypt.checkpw(token.encode(), su.claim_token_hash.encode()):
+            raise InvalidClaimTokenError("Invite token is invalid.")
+        return su
+
+    @staticmethod
+    def _ensure_credentials_if_needed(
+            user: User,
+            system: System,
+            password: Optional[str],
+            pin: Optional[str],
+    ) -> None:
+        updated = []
+        if (
+                system.password_type == System.PasswordType.PASSWORD
+                and system.allow_password_login
+                and not user.has_usable_password()
+        ):
+            if not password:
+                raise ClaimError("Password is required to finish linking this invited account.")
+            user.set_password(password)
+            updated.append("password")
+
+        if (
+                system.password_type == System.PasswordType.PIN
+                and system.allow_password_login
+                and not user.pin
+        ):
+            if not pin:
+                raise ClaimError("PIN is required to finish linking this invited account.")
+            user.set_pin(pin)
+            updated.append("pin")
+
+        if updated:
+            user.save(update_fields=updated)
+
     def _create_system_user_record(
-        user: User,
-        system: System,
-        role: Role,
-        organization: Optional[Organization],
-        primary_country: Optional[Country],
-        first_name: str,
-        last_name: str,
-        middle_name: str,
-        display_name: str,
-        date_of_birth,
-        gender: str,
+            self,
+            user: User,
+            system: System,
+            role: Role,
+            organization: Optional[Organization] = None,
+            primary_country: Optional[Country] = None,
     ) -> SystemUser:
-        system_user, _ = SystemUser.objects.update_or_create(
+        defaults = {
+            "organization": organization,
+            "country": primary_country or system.available_countries.first(),
+            "role": role,
+            "status": SystemUserStatus.ACTIVE,
+        }
+        system_user, created = SystemUser.objects.get_or_create(
             user=user,
             system=system,
-            defaults={
-                "organization": organization,
-                "country": primary_country or system.available_countries.first(),
-                "role": role,
-                "first_name": first_name,
-                "last_name": last_name,
-                "middle_name": middle_name,
-                "display_name": display_name or f"{first_name} {last_name}".strip(),
-                "date_of_birth": date_of_birth,
-                "gender": gender,
-                "status": SystemUserStatus.ACTIVE,
-            },
+            defaults=defaults,
         )
-        ReferralService().ensure_referral_code(system_user)
+        if not created:
+            for key, value in defaults.items():
+                setattr(system_user, key, value)
+            system_user.save(update_fields=list(defaults.keys()))
+
+        self._referral_service.ensure_referral_code(system_user)
+
         return system_user
 
-    @staticmethod
-    def _resolve_existing_user(su: SystemUser, realm: Realm) -> Optional[User]:
-        for id_type, value in [
-            ("email", su.provisioning_email),
-            ("national_id", su.provisioning_national_id),
-            ("phone", su.provisioning_phone),
-        ]:
-            if not value:
-                continue
-            try:
-                return User.objects.get_by_identifier(
-                    value=value,
-                    identifier_type=id_type,
-                    realm=realm
-                )
-            except User.DoesNotExist:
-                continue
-        return None
-
-    def _check_identifier_available(
-            self,
-            realm: Realm,
-            value: Optional[str],
-            identifier_type: str,
-            exclude_user: Optional[User] = None,
-    ):
-        if not value:
+    def _attach_referral_if_present(self, system_user: SystemUser, referral_code: Optional[str]) -> None:
+        if not referral_code:
             return
-        normalised = self._normaliser.normalise(value, identifier_type)
-        qs = UserIdentifier.objects.filter(
-            realm=realm,
-            identifier_type=identifier_type,
-            value_normalised=normalised
-        )
-        if exclude_user:
-            qs = qs.exclude(user=exclude_user)
-        if qs.exists():
-            raise IdentifierConflictError(
-                f"This {identifier_type} is already registered to another account."
+        try:
+            self._referral_service.attach_referral(
+                referred=system_user,
+                referral_code=referral_code
             )
+        except ReferralServiceError as exc:
+            raise SelfRegistrationError(str(exc))
 
     @staticmethod
-    def _suspend_mfa_for_identifier(identifier: UserIdentifier):
-        if identifier.identifier_type not in ("phone", "email"):
-            return
-        UserMFA.objects.filter(
-            user=identifier.user,
-            delivery_target=identifier.value,
-            is_active=True,
-        ).update(is_active=False)
+    def _validate_social_provider(provider: str) -> str:
+        try:
+            return normalize_social_provider(provider)
+        except Exception as exc:
+            raise SelfRegistrationError(str(exc))
 
-    @staticmethod
-    def _flag_sessions_for_reauth(user: User, reason: str = ""):
-        SSOSession.objects.filter(user=user, is_active=True).update(
-            requires_reauth=True,
-            reauth_reason=reason,
-        )
-
-    @staticmethod
-    def _revoke_sessions_for_system(system_user: SystemUser):
-        session_ids = SSOSessionSystemAccess.objects.filter(
-            system=system_user.system,
-            session__user=system_user.user,
-            session__is_active=True,
-        ).values_list("session_id", flat=True)
-        SSOSession.objects.filter(id__in=session_ids, is_active=True).update(
-            is_active=False,
-            revoked_at=timezone.now(),
-            revoke_reason="user_suspended",
-        )
-
-    @staticmethod
-    def _mask_username(username: str) -> str:
-        if not username:
-            return "****"
-        if len(username) == 1:
-            return username
-        if len(username) == 2:
-            return username[0] + "*"
-        return username[0] + "*" * (len(username) - 2) + username[-1]
-
-    @staticmethod
-    def _mask_national_id(national_id: str) -> str:
-        if not national_id:
-            return "****"
-        clean = national_id.replace(" ", "")
-        if len(clean) <= 4:
-            return "*" * len(clean)
-        return "*" * (len(clean) - 3) + clean[-3:]
+    def _validate_social_provider_for_system(self, system: System, provider: str) -> str:
+        provider = self._validate_social_provider(provider)
+        if not system.allow_social_login:
+            raise SelfRegistrationError("This system does not allow social login.")
+        if system.allowed_social_providers and provider not in system.allowed_social_providers:
+            raise SelfRegistrationError(f"This system does not allow {provider} social login.")
+        return provider
 
     @staticmethod
     def _mask_email(email: str) -> str:
-        if not email or "@" not in email:
-            return "****"
         local, _, domain = email.partition("@")
-        if len(local) <= 1:
-            masked_local = local
-        elif len(local) == 2:
-            masked_local = local[0] + "*"
+        if not local or not domain:
+            return email
+        if len(local) <= 2:
+            masked_local = local[0] + "*" * max(0, len(local) - 1)
         else:
             masked_local = local[0] + "*" * (len(local) - 2) + local[-1]
         return f"{masked_local}@{domain}"
@@ -1023,48 +1032,48 @@ class AccountService:
     @staticmethod
     def _mask_phone(phone: str) -> str:
         if not phone:
-            return "****"
-        prefix = "+" if phone.startswith("+") else ""
-        digits = phone.lstrip("+")
-        if len(digits) < 5:
             return phone
-        head_len = 3 if prefix else 2
-        tail_len = 2
-        mask_len = len(digits) - head_len - tail_len
-        if mask_len <= 0:
-            return phone
-        return prefix + digits[:head_len] + "*" * mask_len + digits[-tail_len:]
 
-    @staticmethod
-    def _send_claim_notification(system_user: SystemUser, lookup_id: str, raw_token: str, invited_by: SystemUser):
-        context = {
-            "system_name": system_user.system.name,
-            "base_country": system_user.country.name if system_user.country else "",
-            "organization_name": system_user.organization.name if system_user.organization else None,
-            "role_name": system_user.role.name,
-            "first_name": system_user.first_name or "User",
-            "lookup_id": lookup_id,
-            "claim_url": f"https://yourdomain.com/auth/claim/{lookup_id}/{raw_token}",
-            "invited_by_name": invited_by.full_name if invited_by else "",
-        }
-        recipient = system_user.provisioning_email or system_user.provisioning_phone
-        print(f"[CLAIM NOTIFICATION SENT] To: {recipient}\nContext: {context}")
+        digits = "".join(filter(str.isdigit, phone))
+
+        if len(digits) <= 4:
+            return "*" * len(digits)
+
+        # Assume country code is first 3 digits if number is long enough (e.g. 254)
+        if len(digits) > 9:
+            country_code = digits[:3]
+            rest = digits[3:]
+        else:
+            country_code = ""
+            rest = digits
+
+        if len(rest) <= 4:
+            return country_code + ("*" * len(rest))
+
+        masked = (
+                country_code +
+                rest[:2] +
+                "*" * (len(rest) - 4) +
+                rest[-2:]
+        )
+
+        return masked
 
     @staticmethod
     def _audit(
-        event_type: str,
-        actor_user: Optional[User] = None,
-        actor_system_user: Optional[SystemUser] = None,
-        subject=None,
-        ip: str = "",
-        identifier_type: str = "",
-        payload: dict = None,
-        outcome: str = "success",
+            event_type: str,
+            actor_user: Optional[User] = None,
+            actor_system_user: Optional[SystemUser] = None,
+            subject=None,
+            ip: str = "",
+            identifier_type: str = "",
+            payload: Optional[dict] = None,
+            outcome: str = "success",
     ):
         AuditLog.objects.create(
             event_type=event_type,
             actor_user_id=actor_user.id if actor_user else None,
-            actor_email=actor_user.get_email() if actor_user else "",
+            actor_email=actor_user.get_email() or "" if actor_user else "",
             actor_system_user_id=actor_system_user.id if actor_system_user else None,
             actor_ip=ip or None,
             subject_type=type(subject).__name__ if subject else "",

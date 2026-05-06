@@ -61,6 +61,10 @@ class ResponseProvider:
         return cls._response(False, message, 404, error=error, **kwargs)
 
     @classmethod
+    def conflict(cls, *, message="Conflict", error=None, **kwargs):
+        return cls._response(False, message, 409, error=error, **kwargs)
+
+    @classmethod
     def too_many_requests(cls, *, message="Rate Limit Exceeded", error=None, **kwargs):
         return cls._response(False, message, 429, error=error, **kwargs)
 

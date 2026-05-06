@@ -6,6 +6,7 @@ from .models import (
     Branch,
     OrganizationSettings,
     OrganizationOnboarding,
+    OrganizationOnboardingCountry,
     OnboardingDocument,
     OnboardingActivity,
     DocumentRequest,
@@ -15,7 +16,7 @@ from .models import (
 class OrganizationCountryInline(admin.TabularInline):
     model = OrganizationCountry
     extra = 0
-    autocomplete_fields = ("country",)
+    autocomplete_fields = ("country", "approved_by", "source_onboarding")
     readonly_fields = ("activated_at",)
     ordering = ("-activated_at",)
 
@@ -36,11 +37,11 @@ class OrganizationSettingsInline(admin.TabularInline):
 
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ("name", "system", "slug", "is_active", "verified")
+    list_display = ("name", "system", "slug", "is_active", "verified", "verified_at")
     list_filter = ("is_active", "verified", "system")
     search_fields = ("name", "slug")
     ordering = ("name",)
-    autocomplete_fields = ("system", "verified_by")
+    autocomplete_fields = ("system", "verified_by", "onboarding")
 
     inlines = (
         OrganizationCountryInline,
@@ -53,7 +54,7 @@ class OrganizationAdmin(admin.ModelAdmin):
             "fields": ("system", "name", "slug", "description", "logo_url", "website")
         }),
         ("Status", {
-            "fields": ("is_active", "verified", "verified_at", "verified_by")
+            "fields": ("is_active", "verified", "verified_at", "verified_by", "onboarding")
         }),
         ("Audit", {
             "fields": ("created_at", "updated_at")
@@ -68,15 +69,18 @@ class OrganizationAdmin(admin.ModelAdmin):
 
 @admin.register(OrganizationCountry)
 class OrganizationCountryAdmin(admin.ModelAdmin):
-    list_display = ("organization", "country", "registration_number", "tax_id", "is_active")
-    list_filter = ("country", "is_active")
-    search_fields = ("registration_number", "tax_id")
+    list_display = ("organization", "country", "registration_number", "tax_id", "approval_status", "is_active")
+    list_filter = ("country", "approval_status", "is_active")
+    search_fields = ("organization__name", "registration_number", "tax_id")
     ordering = ("organization",)
-    autocomplete_fields = ("organization", "country")
+    autocomplete_fields = ("organization", "country", "approved_by", "source_onboarding")
 
     fieldsets = (
         ("Details", {
             "fields": ("organization", "country", "registration_number", "tax_id", "is_active")
+        }),
+        ("Approval", {
+            "fields": ("approval_status", "approved_at", "approved_by", "source_onboarding")
         }),
         ("Audit", {
             "fields": ("created_at", "updated_at")
@@ -86,7 +90,7 @@ class OrganizationCountryAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("organization", "country")
+        return super().get_queryset(request).select_related("organization", "country", "approved_by", "source_onboarding")
 
 
 @admin.register(Branch)
@@ -161,6 +165,13 @@ class OnboardingActivityInline(admin.TabularInline):
     ordering = ("-created_at",)
 
 
+class OnboardingCountryInline(admin.TabularInline):
+    model = OrganizationOnboardingCountry
+    extra = 0
+    autocomplete_fields = ("country",)
+    ordering = ("created_at",)
+
+
 class DocumentRequestInline(admin.TabularInline):
     model = DocumentRequest
     extra = 0
@@ -174,22 +185,24 @@ class OrganizationOnboardingAdmin(admin.ModelAdmin):
     list_display = (
         "legal_name",
         "system",
-        "country",
         "status",
         "contact_system_user",
+        "organization",
+        "organization_type",
         "submitted_at",
     )
-    list_filter = ("status", "system", "country")
-    search_fields = ("legal_name", "trading_name", "registration_number", "tax_id")
+    list_filter = ("status", "system", "organization_type", "monthly_transaction_volume", "staff_size")
+    search_fields = ("legal_name", "trading_name", "contact_email", "contact_phone")
     ordering = ("-created_at",)
     autocomplete_fields = (
         "system",
-        "country",
         "contact_system_user",
+        "organization",
         "assigned_to",
     )
 
     inlines = (
+        OnboardingCountryInline,
         OnboardingDocumentInline,
         OnboardingActivityInline,
         DocumentRequestInline,
@@ -197,20 +210,27 @@ class OrganizationOnboardingAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Onboarding Info", {
-            "fields": ("system", "country", "status", "contact_system_user", "assigned_to")
+            "fields": ("system", "status", "contact_system_user", "organization", "assigned_to")
         }),
         ("Business Details", {
             "fields": (
                 "legal_name",
                 "trading_name",
-                "registration_number",
-                "tax_id",
+                "organization_type",
                 "website",
                 "description",
             )
         }),
+        ("Business Profile", {
+            "fields": (
+                "products_needed",
+                "monthly_transaction_volume",
+                "staff_size",
+                "pain_points",
+            )
+        }),
         ("Contact Details", {
-            "fields": ("address", "contact_email", "contact_phone")
+            "fields": ("contact_email", "contact_phone")
         }),
         ("Metadata", {
             "fields": ("metadata",)
@@ -232,13 +252,36 @@ class OrganizationOnboardingAdmin(admin.ModelAdmin):
         return (
             super()
             .get_queryset(request)
-            .select_related("system", "country", "contact_system_user", "assigned_to")
+            .select_related("system", "contact_system_user", "organization", "assigned_to")
             .prefetch_related(
+                "country_requests",
                 "documents",
                 "activities",
                 "document_requests",
             )
         )
+
+
+@admin.register(OrganizationOnboardingCountry)
+class OrganizationOnboardingCountryAdmin(admin.ModelAdmin):
+    list_display = ("onboarding", "country", "registration_number", "tax_id", "created_at")
+    list_filter = ("country",)
+    search_fields = ("onboarding__legal_name", "registration_number", "tax_id")
+    ordering = ("onboarding", "country")
+    autocomplete_fields = ("onboarding", "country")
+    readonly_fields = ("created_at", "updated_at")
+
+    fieldsets = (
+        ("Country", {
+            "fields": ("onboarding", "country", "registration_number", "tax_id", "address", "metadata")
+        }),
+        ("Audit", {
+            "fields": ("created_at", "updated_at")
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("onboarding", "country")
 
 
 @admin.register(OnboardingDocument)
@@ -252,7 +295,7 @@ class OnboardingDocumentAdmin(admin.ModelAdmin):
         "is_expired",
     )
     list_filter = ("status", "document_type")
-    search_fields = ("label", "file_name")
+    search_fields = ("label", "file_name", "onboarding__legal_name")
     ordering = ("-uploaded_at",)
     autocomplete_fields = ("onboarding", "uploaded_by", "reviewed_by", "replaces")
 
@@ -295,14 +338,14 @@ class OnboardingDocumentAdmin(admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("onboarding", "uploaded_by")
+        return super().get_queryset(request).select_related("onboarding", "uploaded_by", "reviewed_by", "replaces")
 
 
 @admin.register(OnboardingActivity)
 class OnboardingActivityAdmin(admin.ModelAdmin):
     list_display = ("activity_type", "onboarding", "performed_by", "created_at")
     list_filter = ("activity_type",)
-    search_fields = ("description",)
+    search_fields = ("description", "onboarding__legal_name")
     ordering = ("-created_at",)
     autocomplete_fields = ("onboarding", "performed_by", "document")
 
@@ -327,7 +370,7 @@ class OnboardingActivityAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("onboarding", "performed_by")
+        return super().get_queryset(request).select_related("onboarding", "performed_by", "document")
 
 
 @admin.register(DocumentRequest)

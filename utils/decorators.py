@@ -5,11 +5,11 @@ from utils.extended_request import ExtendedRequest
 from utils.response_provider import ResponseProvider
 
 
-def user_login_required(required_permission: Optional[Union[str, list[str]]] = None):
+def require_user_context(required_permission: Optional[Union[str, list[str]]] = None):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(request: ExtendedRequest, *args, **kwargs):
-            if not request.is_authenticated:
+            if not request.user_context_selected or not request.system_user:
                 return ResponseProvider.unauthorized()
 
             # Permission check
@@ -37,11 +37,11 @@ def user_login_required(required_permission: Optional[Union[str, list[str]]] = N
     return decorator
 
 
-def sso_session_required(func):
+def require_active_session(func):
     @functools.wraps(func)
-    def wrapper(request, *args, **kwargs):
-        sso_session = request.session
-        if not sso_session:
+    def wrapper(request: ExtendedRequest, *args, **kwargs):
+        sso_session = request.sso_session
+        if not request.is_authenticated or not sso_session:
             return ResponseProvider.unauthorized(
                 error="invalid_session",
                 message="Your session is invalid, expired, or has been revoked. Please authenticate again."
@@ -53,3 +53,6 @@ def sso_session_required(func):
             )
         return func(request, *args, **kwargs)
     return wrapper
+
+
+user_login_required = require_user_context

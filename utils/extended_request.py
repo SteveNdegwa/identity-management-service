@@ -16,11 +16,12 @@ class ExtendedRequest(HttpRequest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user: Union[User, AnonymousUser] = AnonymousUser()
+        self.is_authenticated: bool = False
+        self.user_context_selected = False
         self.system_user: Optional[SystemUser] = None
         self.system_client: Optional[SystemClient] = None
         self.sso_session: Optional[SSOSession] = None
         self.access_token: Optional[AccessToken] = None
-        self.is_authenticated: bool = False
         self.user_permissions: list = []
         self.client_ip: str = ''
         self.user_agent: str = ''

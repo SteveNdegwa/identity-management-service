@@ -6,68 +6,318 @@
     "description": "Postman collection for the Spin Identity API under /api."
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
-    { "key": "clientId", "value": "replace-client-id" },
-    { "key": "clientSecret", "value": "replace-client-secret" },
-    { "key": "systemId", "value": "replace-system-id" },
-    { "key": "roleId", "value": "replace-role-id" },
-    { "key": "countryId", "value": "replace-country-id" },
-    { "key": "organizationId", "value": "replace-organization-id" },
-    { "key": "orgCountryId", "value": "replace-org-country-id" },
-    { "key": "branchId", "value": "replace-branch-id" },
-    { "key": "identifierId", "value": "replace-identifier-id" },
-    { "key": "systemUserId", "value": "replace-system-user-id" },
-    { "key": "onboardingId", "value": "replace-onboarding-id" },
-    { "key": "documentId", "value": "replace-document-id" },
-    { "key": "pendingContextId", "value": "replace-pending-context-id" },
-    { "key": "pendingEnrollmentId", "value": "replace-pending-enrollment-id" },
-    { "key": "mfaId", "value": "replace-mfa-id" },
-    { "key": "settingKey", "value": "replace-setting-key" },
-    { "key": "lookupId", "value": "replace-lookup-id" },
-    { "key": "claimToken", "value": "replace-claim-token" },
-    { "key": "challengeId", "value": "replace-challenge-id" },
-    { "key": "authorizationCode", "value": "replace-auth-code" },
-    { "key": "refreshToken", "value": "replace-refresh-token" },
-    { "key": "accessToken", "value": "" },
-    { "key": "ssoSessionId", "value": "" },
-    { "key": "redirectUri", "value": "http://localhost:3000/callback" }
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "realmId",
+      "value": "replace-realm-id"
+    },
+    {
+      "key": "clientId",
+      "value": "replace-client-id"
+    },
+    {
+      "key": "clientSecret",
+      "value": "replace-client-secret"
+    },
+    {
+      "key": "systemClientId",
+      "value": "replace-system-client-id"
+    },
+    {
+      "key": "systemId",
+      "value": "replace-system-id"
+    },
+    {
+      "key": "roleId",
+      "value": "replace-role-id"
+    },
+    {
+      "key": "countryId",
+      "value": "replace-country-id"
+    },
+    {
+      "key": "organizationId",
+      "value": "replace-organization-id"
+    },
+    {
+      "key": "orgCountryId",
+      "value": "replace-org-country-id"
+    },
+    {
+      "key": "branchId",
+      "value": "replace-branch-id"
+    },
+    {
+      "key": "identifierId",
+      "value": "email"
+    },
+    {
+      "key": "verificationId",
+      "value": "replace-verification-id"
+    },
+    {
+      "key": "emailVerificationId",
+      "value": "replace-email-verification-id"
+    },
+    {
+      "key": "phoneVerificationId",
+      "value": "replace-phone-verification-id"
+    },
+    {
+      "key": "systemUserId",
+      "value": "replace-system-user-id"
+    },
+    {
+      "key": "referralId",
+      "value": "replace-referral-id"
+    },
+    {
+      "key": "onboardingId",
+      "value": "replace-onboarding-id"
+    },
+    {
+      "key": "countryRequestId",
+      "value": "replace-country-request-id"
+    },
+    {
+      "key": "documentId",
+      "value": "replace-document-id"
+    },
+    {
+      "key": "documentRequestId",
+      "value": "replace-document-request-id"
+    },
+    {
+      "key": "pendingContextId",
+      "value": "replace-pending-context-id"
+    },
+    {
+      "key": "categoryId",
+      "value": "replace-category-id"
+    },
+    {
+      "key": "permissionId",
+      "value": "replace-permission-id"
+    },
+    {
+      "key": "overrideId",
+      "value": "replace-override-id"
+    },
+    {
+      "key": "settingKey",
+      "value": "replace-setting-key"
+    },
+    {
+      "key": "settingId",
+      "value": "replace-setting-id"
+    },
+    {
+      "key": "lookupId",
+      "value": "replace-lookup-id"
+    },
+    {
+      "key": "claimToken",
+      "value": "replace-claim-token"
+    },
+    {
+      "key": "challengeId",
+      "value": "replace-challenge-id"
+    },
+    {
+      "key": "magicLinkToken",
+      "value": "replace-magic-link-token"
+    },
+    {
+      "key": "authorizationCode",
+      "value": "replace-auth-code"
+    },
+    {
+      "key": "refreshToken",
+      "value": "replace-refresh-token"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "ssoSessionId",
+      "value": ""
+    },
+    {
+      "key": "redirectUri",
+      "value": "http://localhost:3000/callback"
+    }
   ],
   "item": [
     {
       "name": "Accounts",
       "item": [
         {
+          "name": "Registration Identifier Initiate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/register/identifiers/initiate/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"identifier_type\": \"email\",\n  \"value\": \"ada@example.com\",\n  \"method\": \"otp\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Registration Identifier Verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/register/identifiers/verify/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verification_id\": \"{{verificationId}}\",\n  \"code\": \"123456\",\n  \"token\": \"\"\n}"
+            }
+          }
+        },
+        {
           "name": "Register",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/accounts/register/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"middle_name\": \"\",\n  \"display_name\": \"Ada Lovelace\",\n  \"date_of_birth\": \"1990-01-01\",\n  \"gender\": \"female\",\n  \"profile_photo_url\": \"https://example.com/avatar.jpg\",\n  \"metadata\": {},\n  \"external_ref\": \"ext-123\",\n  \"email\": \"ada@example.com\",\n  \"phone_number\": \"+254700000000\",\n  \"username\": \"ada\",\n  \"national_id\": \"12345678\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\"\n}"
-            },
-            "url": "{{baseUrl}}/api/accounts/register/"
-          }
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"middle_name\": \"\",\n  \"display_name\": \"Ada Lovelace\",\n  \"date_of_birth\": \"1990-01-01\",\n  \"gender\": \"female\",\n  \"profile_photo_url\": \"https://example.com/avatar.jpg\",\n  \"email\": \"ada@example.com\",\n  \"phone_number\": \"+254700000000\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"referral_code\": \"\",\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Register Link",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/accounts/register/link/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"existing_user_id\": \"replace-existing-user-id\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"display_name\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"phone_number\": \"+254700000000\",\n  \"username\": \"ada\",\n  \"national_id\": \"12345678\"\n}"
-            },
-            "url": "{{baseUrl}}/api/accounts/register/link/"
-          }
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"existing_user_id\": \"replace-existing-user-id\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"referral_code\": \"\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register Social",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/register/social/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"display_name\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"phone_number\": \"+254700000000\",\n  \"provider\": \"google\",\n  \"provider_user_id\": \"google-oauth-subject-123\",\n  \"access_token\": \"provider-access-token\",\n  \"refresh_token\": \"\",\n  \"extra_data\": {\n    \"avatar_url\": \"https://example.com/avatar.jpg\"\n  },\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register Social Link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/register/social/link/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"existing_user_id\": \"replace-existing-user-id\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"provider\": \"google\",\n  \"provider_user_id\": \"google-oauth-subject-123\",\n  \"access_token\": \"provider-access-token\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Claim Inspect",
           "request": {
             "method": "GET",
+            "header": [],
             "url": "{{baseUrl}}/api/accounts/claim/inspect/?lookup_id={{lookupId}}&token={{claimToken}}"
           }
         },
@@ -76,13 +326,16 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/accounts/claim/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"lookup_id\": \"{{lookupId}}\",\n  \"token\": \"{{claimToken}}\",\n  \"claim_action\": \"link\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"email\": \"ada@example.com\",\n  \"phone\": \"+254700000000\",\n  \"national_id\": \"12345678\",\n  \"username\": \"ada\"\n}"
-            },
-            "url": "{{baseUrl}}/api/accounts/claim/"
+              "raw": "{\n  \"lookup_id\": \"{{lookupId}}\",\n  \"token\": \"{{claimToken}}\",\n  \"claim_action\": \"link\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"phone_number\": \"+254700000000\",\n  \"country_id\": \"{{countryId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  }\n}"
+            }
           }
         },
         {
@@ -90,7 +343,10 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
             "url": "{{baseUrl}}/api/accounts/me/"
           }
@@ -100,14 +356,67 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/accounts/me/edit/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"display_name\": \"Ada L.\",\n  \"profile_photo_url\": \"https://example.com/avatar.jpg\",\n  \"metadata\": {\n    \"department\": \"engineering\"\n  },\n  \"external_ref\": \"ext-123\"\n}"
-            },
-            "url": "{{baseUrl}}/api/accounts/me/edit/"
+              "raw": "{\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"middle_name\": \"\",\n  \"display_name\": \"Ada L.\",\n  \"date_of_birth\": \"1990-01-01\",\n  \"gender\": \"female\",\n  \"profile_photo_url\": \"https://example.com/avatar.jpg\"\n}"
+            }
+          }
+        },
+        {
+          "name": "My Referrals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/me/referrals/"
+          }
+        },
+        {
+          "name": "Attach My Referral",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/me/referrals/attach/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"referral_code\": \"REF-CODE-123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Referrals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/referrals/?system_id={{systemId}}&verified=true&rewarded=false"
           }
         },
         {
@@ -115,24 +424,33 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
             "url": "{{baseUrl}}/api/accounts/me/identifiers/"
           }
         },
         {
-          "name": "Add Identifier",
+          "name": "Initiate Identifier Verification",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/accounts/me/identifiers/{{identifierId}}/verify/initiate/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"identifier_type\": \"email\",\n  \"value\": \"ada+secondary@example.com\",\n  \"require_verification\": true\n}"
-            },
-            "url": "{{baseUrl}}/api/accounts/me/identifiers/add/"
+              "raw": "{\n  \"method\": \"otp\"\n}"
+            }
           }
         },
         {
@@ -140,33 +458,66 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
-            "url": "{{baseUrl}}/api/accounts/me/identifiers/{{identifierId}}/verify/"
+            "url": "{{baseUrl}}/api/accounts/me/identifiers/{{identifierId}}/verify/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verification_id\": \"{{verificationId}}\",\n  \"code\": \"123456\",\n  \"token\": \"\"\n}"
+            }
           }
         },
         {
-          "name": "Promote Identifier",
+          "name": "Add Identifier (Unsupported)",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/me/identifiers/add/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier_type\": \"email\",\n  \"value\": \"ada+secondary@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Promote Identifier (Unsupported)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
             "url": "{{baseUrl}}/api/accounts/me/identifiers/{{identifierId}}/primary/"
           }
         },
         {
-          "name": "Remove Identifier",
+          "name": "Remove Identifier (Unsupported)",
           "request": {
-            "method": "DELETE",
+            "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reason\": \"user_removed\"\n}"
-            },
             "url": "{{baseUrl}}/api/accounts/me/identifiers/{{identifierId}}/"
           }
         },
@@ -175,14 +526,20 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/accounts/system-users/provision/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"all_branches\": true,\n  \"email\": \"new.user@example.com\",\n  \"phone\": \"+254700000001\",\n  \"national_id\": \"98765432\",\n  \"first_name\": \"Grace\",\n  \"last_name\": \"Hopper\",\n  \"middle_name\": \"\",\n  \"display_name\": \"Grace Hopper\",\n  \"external_ref\": \"ext-234\",\n  \"metadata\": {}\n}"
-            },
-            "url": "{{baseUrl}}/api/accounts/system-users/provision/"
+              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"all_branches\": true,\n  \"provisioning_email\": \"new.user@example.com\",\n  \"external_ref\": \"ext-234\",\n  \"metadata\": {}\n}"
+            }
           }
         },
         {
@@ -190,14 +547,20 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/accounts/system-users/{{systemUserId}}/suspend/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reason\": \"policy_violation\"\n}"
-            },
-            "url": "{{baseUrl}}/api/accounts/system-users/{{systemUserId}}/suspend/"
+            }
           }
         },
         {
@@ -205,9 +568,59 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/accounts/system-users/{{systemUserId}}/restore/"
+          }
+        },
+        {
+          "name": "Verify Referral",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/referrals/{{referralId}}/verify/"
+          }
+        },
+        {
+          "name": "Reward Referral",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/referrals/{{referralId}}/reward/"
+          }
+        },
+        {
+          "name": "Reward Referrer Referrals",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/accounts/system-users/{{systemUserId}}/referrals/reward/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"referral_ids\": [\n    \"{{referralId}}\"\n  ]\n}"
+            }
           }
         }
       ]
@@ -217,6 +630,20 @@
       "item": [
         {
           "name": "Password Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login/password/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"login_value\": \"ada@example.com\",\n  \"password\": \"StrongPassword123!\",\n  \"device_id\": \"device-1\",\n  \"device_name\": \"MacBook Pro\"\n}"
+            }
+          },
           "event": [
             {
               "listen": "test",
@@ -225,49 +652,90 @@
                 "exec": [
                   "let data = {};",
                   "try { data = pm.response.json(); } catch (e) {}",
-                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);"
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
                 ]
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"login_value\": \"ada@example.com\",\n  \"password\": \"StrongPassword123!\",\n  \"device_id\": \"device-1\",\n  \"device_name\": \"MacBook Pro\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/login/password/"
-          }
+          ]
         },
         {
           "name": "PIN Login",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/login/pin/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"login_value\": \"ada@example.com\",\n  \"pin\": \"1234\",\n  \"device_id\": \"device-1\",\n  \"device_name\": \"MacBook Pro\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/login/pin/"
-          }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Social Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login/social/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"provider\": \"google\",\n  \"provider_user_id\": \"google-oauth-subject-123\",\n  \"device_id\": \"browser-1\",\n  \"device_name\": \"Chrome on macOS\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Passwordless Initiate",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/passwordless/initiate/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"login_value\": \"ada@example.com\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/passwordless/initiate/"
+            }
           }
         },
         {
@@ -275,27 +743,47 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/passwordless/verify/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"challenge_id\": \"{{challengeId}}\",\n  \"code\": \"123456\",\n  \"device_id\": \"device-1\",\n  \"device_name\": \"MacBook Pro\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/passwordless/verify/"
-          }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Magic Link Initiate",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/magic-link/initiate/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"email\": \"ada@example.com\",\n  \"scopes\": [\"openid\", \"profile\"]\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/magic-link/initiate/"
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"email\": \"ada@example.com\",\n  \"scopes\": [\n    \"openid\",\n    \"profile\"\n  ]\n}"
+            }
           }
         },
         {
@@ -303,66 +791,97 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/magic-link/verify/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"token\": \"replace-magic-link-token\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/magic-link/verify/"
-          }
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"token\": \"{{magicLinkToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "System MFA OTP Initiate",
+          "name": "System MFA Initiate",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/system-mfa/initiate/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"method\": \"email_otp\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/system-mfa/otp/initiate/"
+            }
           }
         },
         {
-          "name": "System MFA OTP Verify",
+          "name": "System MFA Verify",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/system-mfa/verify/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"challenge_id\": \"{{challengeId}}\",\n  \"code\": \"123456\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/system-mfa/otp/verify/"
-          }
-        },
-        {
-          "name": "System MFA Code Verify",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"method\": \"totp\",\n  \"code\": \"123456\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/system-mfa/code/verify/"
-          }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.session_id) pm.collectionVariables.set('ssoSessionId', data.session_id);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "List Contexts",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
             "url": "{{baseUrl}}/api/auth/contexts/?client_id={{clientId}}"
           }
@@ -372,161 +891,108 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/context/select/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"system_user_id\": \"{{systemUserId}}\",\n  \"redirect_uri\": \"{{redirectUri}}\",\n  \"scopes\": [\"openid\", \"profile\"],\n  \"state\": \"state-123\",\n  \"nonce\": \"nonce-123\",\n  \"code_challenge\": \"replace-code-challenge\",\n  \"code_challenge_method\": \"S256\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/context/select/"
-          }
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"system_user_id\": \"{{systemUserId}}\",\n  \"redirect_uri\": \"{{redirectUri}}\",\n  \"scopes\": [\n    \"openid\",\n    \"profile\"\n  ],\n  \"state\": \"state-123\",\n  \"nonce\": \"nonce-123\",\n  \"code_challenge\": \"replace-code-challenge\",\n  \"code_challenge_method\": \"S256\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.authorization_code) pm.collectionVariables.set('authorizationCode', data.authorization_code);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Context MFA OTP Initiate",
+          "name": "Context MFA Initiate",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/context-mfa/initiate/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"method\": \"email_otp\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/context-mfa/otp/initiate/"
+            }
           }
         },
         {
-          "name": "Context MFA OTP Verify",
+          "name": "Context MFA Verify",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/context-mfa/verify/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"challenge_id\": \"{{challengeId}}\",\n  \"code\": \"123456\",\n  \"pending_context_id\": \"{{pendingContextId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/context-mfa/otp/verify/"
-          }
-        },
-        {
-          "name": "Context MFA Code Verify",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"method\": \"totp\",\n  \"code\": \"123456\",\n  \"pending_context_id\": \"{{pendingContextId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/context-mfa/code/verify/"
-          }
-        },
-        {
-          "name": "MFA Enroll Initiate",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"method\": \"email_otp\",\n  \"device_name\": \"Primary Email\",\n  \"delivery_target\": \"ada@example.com\",\n  \"pending_enrollment_id\": \"{{pendingEnrollmentId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/mfa/enroll/initiate/"
-          }
-        },
-        {
-          "name": "MFA Enroll Verify",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"method\": \"email_otp\",\n  \"code\": \"123456\",\n  \"pending_enrollment_id\": \"{{pendingEnrollmentId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/mfa/enroll/verify/"
-          }
-        },
-        {
-          "name": "List MFA Methods",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
-            ],
-            "url": "{{baseUrl}}/api/auth/mfa/"
-          }
-        },
-        {
-          "name": "Set MFA Primary",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mfa_id\": \"{{mfaId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/mfa/primary/"
-          }
-        },
-        {
-          "name": "Remove MFA",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mfa_id\": \"{{mfaId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/mfa/remove/"
-          }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.authorization_code) pm.collectionVariables.set('authorizationCode', data.authorization_code);",
+                  "if (data.pending_context_id) pm.collectionVariables.set('pendingContextId', data.pending_context_id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Token Exchange",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "let data = {};",
-                  "try { data = pm.response.json(); } catch (e) {}",
-                  "if (data.access_token) pm.collectionVariables.set('accessToken', data.access_token);",
-                  "if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);"
-                ]
-              }
-            }
-          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/token/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"client_secret\": \"{{clientSecret}}\",\n  \"code\": \"{{authorizationCode}}\",\n  \"redirect_uri\": \"{{redirectUri}}\",\n  \"code_verifier\": \"replace-code-verifier\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/token/"
-          }
-        },
-        {
-          "name": "Token Refresh",
+            }
+          },
           "event": [
             {
               "listen": "test",
@@ -540,31 +1006,54 @@
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Token Refresh",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/token/refresh/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/token/refresh/"
-          }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let data = {};",
+                  "try { data = pm.response.json(); } catch (e) {}",
+                  "if (data.access_token) pm.collectionVariables.set('accessToken', data.access_token);",
+                  "if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Token Revoke",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/revoke/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"token\": \"{{accessToken}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/revoke/"
+            }
           }
         },
         {
@@ -572,13 +1061,16 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{baseUrl}}/api/auth/introspect/",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"token\": \"{{accessToken}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/introspect/"
+            }
           }
         },
         {
@@ -586,9 +1078,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
             "url": "{{baseUrl}}/api/auth/logout/"
+          }
+        },
+        {
+          "name": "Logout System",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/logout/system/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"system_id\": \"{{systemId}}\"\n}"
+            }
           }
         },
         {
@@ -596,7 +1112,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "X-SSO-Session-Id", "value": "{{ssoSessionId}}" }
+              {
+                "key": "X-SSO-Session-Id",
+                "value": "{{ssoSessionId}}"
+              }
             ],
             "url": "{{baseUrl}}/api/auth/logout/all/"
           }
@@ -611,7 +1130,10 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/?system_id={{systemId}}&is_active=true&verified=true"
           }
@@ -628,8 +1150,14 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -643,7 +1171,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/{{organizationId}}/deactivate/"
           }
@@ -653,7 +1184,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/{{organizationId}}/reactivate/"
           }
@@ -663,7 +1197,10 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/{{organizationId}}/countries/"
           }
@@ -673,8 +1210,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -688,8 +1231,14 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -703,7 +1252,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/countries/{{orgCountryId}}/deactivate/"
           }
@@ -713,7 +1265,10 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/{{organizationId}}/branches/?country_id={{countryId}}&is_active=true&root_only=false"
           }
@@ -723,8 +1278,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -738,7 +1299,10 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/branches/{{branchId}}/"
           }
@@ -748,8 +1312,14 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -763,7 +1333,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/branches/{{branchId}}/deactivate/"
           }
@@ -773,7 +1346,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/branches/{{branchId}}/reactivate/"
           }
@@ -783,7 +1359,10 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/{{organizationId}}/settings/"
           }
@@ -793,8 +1372,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -808,7 +1393,10 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/{{organizationId}}/settings/{{settingKey}}/delete/"
           }
@@ -818,25 +1406,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
-              "mode": "formdata",
-              "formdata": [
-                { "key": "system_id", "value": "{{systemId}}", "type": "text" },
-                { "key": "country_id", "value": "{{countryId}}", "type": "text" },
-                { "key": "legal_name", "value": "Spin Identity Kenya Ltd", "type": "text" },
-                { "key": "trading_name", "value": "Spin Identity", "type": "text" },
-                { "key": "registration_number", "value": "C.12345", "type": "text" },
-                { "key": "tax_id", "value": "P051234567A", "type": "text" },
-                { "key": "address", "value": "Nairobi, Kenya", "type": "text" },
-                { "key": "contact_email", "value": "ops@example.com", "type": "text" },
-                { "key": "contact_phone", "value": "+254700000002", "type": "text" },
-                { "key": "website", "value": "https://example.com", "type": "text" },
-                { "key": "description", "value": "Organization onboarding request", "type": "text" },
-                { "key": "metadata", "value": "{\"source\":\"postman\"}", "type": "text" },
-                { "key": "documents", "type": "file", "src": "" }
-              ]
+              "mode": "raw",
+              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"organization_id\": \"\",\n  \"legal_name\": \"Spin Identity Kenya Ltd\",\n  \"trading_name\": \"Spin Identity\",\n  \"organization_type\": \"microfinance\",\n  \"products_needed\": [\n    \"statement_analysis\",\n    \"kyc_kyb_checks\"\n  ],\n  \"monthly_transaction_volume\": \"2501_to_5000\",\n  \"staff_size\": \"21_to_50\",\n  \"pain_points\": [\n    \"manual_analysis\",\n    \"fraud\"\n  ],\n  \"countries\": [\n    {\n      \"country_id\": \"{{countryId}}\",\n      \"registration_number\": \"C.12345\",\n      \"tax_id\": \"P051234567A\",\n      \"address\": \"Nairobi, Kenya\",\n      \"metadata\": {\n        \"source\": \"postman\"\n      }\n    }\n  ],\n  \"contact_email\": \"ops@example.com\",\n  \"contact_phone\": \"+254700000002\",\n  \"website\": \"https://example.com\",\n  \"description\": \"Organization onboarding request\",\n  \"metadata\": {\n    \"source\": \"postman\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/organizations/onboarding/"
           }
@@ -846,7 +1427,10 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/"
           }
@@ -856,12 +1440,18 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"trading_name\": \"Spin Identity Africa\",\n  \"website\": \"https://africa.example.com\",\n  \"description\": \"Updated onboarding description\"\n}"
+              "raw": "{\n  \"trading_name\": \"Spin Identity Africa\",\n  \"website\": \"https://africa.example.com\",\n  \"description\": \"Updated onboarding description\",\n  \"products_needed\": [\n    \"statement_analysis\"\n  ],\n  \"pain_points\": [\n    \"manual_analysis\"\n  ]\n}"
             },
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/update/"
           }
@@ -871,7 +1461,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/submit/"
           }
@@ -881,16 +1474,39 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "document_type", "value": "certificate_of_incorporation", "type": "text" },
-                { "key": "label", "value": "Incorporation Certificate", "type": "text" },
-                { "key": "expires_at", "value": "", "type": "text" },
-                { "key": "fulfils_request_id", "value": "", "type": "text" },
-                { "key": "file", "type": "file", "src": "" }
+                {
+                  "key": "document_type",
+                  "value": "business_registration",
+                  "type": "text"
+                },
+                {
+                  "key": "label",
+                  "value": "Incorporation Certificate",
+                  "type": "text"
+                },
+                {
+                  "key": "expires_at",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "fulfils_request_id",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
               ]
             },
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/documents/upload/"
@@ -901,7 +1517,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/start-review/"
           }
@@ -911,12 +1530,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"document_type\": \"tax_certificate\",\n  \"reason\": \"Missing compliance document\",\n  \"label\": \"Tax Certificate\",\n  \"deadline\": \"2026-05-01T00:00:00Z\",\n  \"applicant_notes\": \"Please upload the latest certificate.\"\n}"
+              "raw": "{\n  \"document_type\": \"kra_pin\",\n  \"reason\": \"Missing KRA PIN certificate\",\n  \"label\": \"KRA PIN Certificate\",\n  \"deadline\": \"2026-05-30T00:00:00Z\",\n  \"applicant_notes\": \"Please upload the latest certificate.\"\n}"
             },
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/request-documents/"
           }
@@ -926,8 +1551,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -941,8 +1572,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -956,8 +1593,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -971,7 +1614,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/complete/"
           }
@@ -981,14 +1627,721 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"note\": \"Customer called to confirm details.\",\n  \"internal\": true\n}"
             },
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/note/"
+          }
+        },
+        {
+          "name": "Add Onboarding Country",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/countries/add/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"country_id\": \"{{countryId}}\",\n  \"registration_number\": \"REG-002\",\n  \"tax_id\": \"TAX-002\",\n  \"address\": \"Mombasa, Kenya\",\n  \"metadata\": {}\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Onboarding Country",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/organizations/onboarding/countries/{{countryRequestId}}/update/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_number\": \"REG-003\",\n  \"tax_id\": \"TAX-003\",\n  \"address\": \"Nairobi, Kenya\",\n  \"metadata\": {\n    \"updated\": true\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove Onboarding Country",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/organizations/onboarding/countries/{{countryRequestId}}/remove/"
+          }
+        },
+        {
+          "name": "Create Country Onboarding for Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/organizations/{{organizationId}}/countries/onboarding/",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "country_id",
+                  "value": "{{countryId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "registration_number",
+                  "value": "REG-NEW",
+                  "type": "text"
+                },
+                {
+                  "key": "tax_id",
+                  "value": "TAX-NEW",
+                  "type": "text"
+                },
+                {
+                  "key": "address",
+                  "value": "Nairobi, Kenya",
+                  "type": "text"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove Onboarding Document",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/organizations/onboarding/documents/{{documentId}}/remove/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Systems",
+      "item": [
+        {
+          "name": "List Systems",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/?is_active=true"
+          }
+        },
+        {
+          "name": "Create System",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/create/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"realm_id\": \"{{realmId}}\",\n  \"name\": \"Demo System\",\n  \"slug\": \"demo-system\",\n  \"description\": \"Demo system\",\n  \"logo_url\": \"\",\n  \"website\": \"https://example.com\",\n  \"password_type\": \"password\",\n  \"allow_password_login\": true,\n  \"allow_passwordless_login\": true,\n  \"allow_magic_link_login\": true,\n  \"allow_social_login\": true,\n  \"allowed_social_providers\": [\n    \"google\"\n  ],\n  \"passwordless_only\": false,\n  \"registration_open\": true,\n  \"auto_login_after_registration\": true,\n  \"requires_approval\": false,\n  \"allows_referrals\": true,\n  \"referral_reward_amount\": \"100.00\",\n  \"auto_verify_referrals\": false,\n  \"mfa_required\": false,\n  \"mfa_required_enforced\": false,\n  \"allowed_mfa_methods\": [],\n  \"refresh_token_timeout_minutes\": null,\n  \"mfa_reauth_window_minutes\": 0,\n  \"country_ids\": [\n    \"{{countryId}}\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "System Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/"
+          }
+        },
+        {
+          "name": "Update System",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/update/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description\",\n  \"registration_open\": true,\n  \"allows_referrals\": true,\n  \"allowed_social_providers\": [\n    \"google\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Deactivate System",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/deactivate/"
+          }
+        },
+        {
+          "name": "Reactivate System",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/reactivate/"
+          }
+        },
+        {
+          "name": "List System Countries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/countries/"
+          }
+        },
+        {
+          "name": "Add System Country",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/countries/add/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"country_id\": \"{{countryId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove System Country",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/countries/remove/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"country_id\": \"{{countryId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Clients",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/clients/"
+          }
+        },
+        {
+          "name": "Create Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/clients/create/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Web App\",\n  \"client_type\": \"confidential\",\n  \"redirect_uris\": [\n    \"{{redirectUri}}\"\n  ],\n  \"logout_uris\": [\n    \"http://localhost:3000/logout\"\n  ],\n  \"allowed_scopes\": [\n    \"openid\",\n    \"profile\"\n  ],\n  \"access_token_ttl\": 900,\n  \"refresh_token_ttl\": 86400,\n  \"id_token_ttl\": 900,\n  \"override_allow_passwordless_login\": null,\n  \"override_allow_magic_link_login\": null,\n  \"override_allow_social_login\": null,\n  \"override_allowed_social_providers\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Client Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/clients/{{systemClientId}}/"
+          }
+        },
+        {
+          "name": "Update Client",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/clients/{{systemClientId}}/update/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Web App\",\n  \"redirect_uris\": [\n    \"{{redirectUri}}\"\n  ],\n  \"allowed_scopes\": [\n    \"openid\",\n    \"profile\",\n    \"email\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Deactivate Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/clients/{{systemClientId}}/deactivate/"
+          }
+        },
+        {
+          "name": "Reactivate Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/clients/{{systemClientId}}/reactivate/"
+          }
+        },
+        {
+          "name": "List System Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/settings/"
+          }
+        },
+        {
+          "name": "Set System Setting",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/{{systemId}}/settings/set/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"{{settingKey}}\",\n  \"value\": \"true\",\n  \"value_type\": \"boolean\",\n  \"description\": \"Feature flag\",\n  \"is_secret\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "System Setting Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/systems/settings/{{settingId}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/systems/{{systemId}}/categories/"
+          }
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/systems/{{systemId}}/categories/create/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Accounts\",\n  \"slug\": \"accounts\",\n  \"description\": \"Account permissions\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Category Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/categories/{{categoryId}}/"
+          }
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/categories/{{categoryId}}/update/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Accounts\",\n  \"description\": \"Updated account permissions\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/systems/{{systemId}}/permissions/"
+          }
+        },
+        {
+          "name": "Create Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/systems/{{systemId}}/permissions/create/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category_id\": \"{{categoryId}}\",\n  \"codename\": \"accounts.view\",\n  \"name\": \"View accounts\",\n  \"description\": \"Can view accounts\",\n  \"is_read_only\": true,\n  \"is_sensitive\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Permission Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/items/{{permissionId}}/"
+          }
+        },
+        {
+          "name": "Update Permission",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/items/{{permissionId}}/update/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"View accounts\",\n  \"description\": \"Updated permission\",\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/systems/{{systemId}}/roles/"
+          }
+        },
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/systems/{{systemId}}/roles/create/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"country_id\": \"{{countryId}}\",\n  \"name\": \"Admin\",\n  \"slug\": \"admin\",\n  \"description\": \"System administrator\",\n  \"parent_role_id\": \"\",\n  \"mfa_required\": false,\n  \"mfa_allowed_methods\": [],\n  \"mfa_reauth_window_minutes\": 0,\n  \"permission_codenames\": [\n    \"accounts.view\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Role Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/roles/{{roleId}}/"
+          }
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/roles/{{roleId}}/update/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin\",\n  \"description\": \"Updated administrator role\",\n  \"permission_codenames\": [\n    \"accounts.view\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Deactivate Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/roles/{{roleId}}/deactivate/"
+          }
+        },
+        {
+          "name": "Reactivate Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/roles/{{roleId}}/reactivate/"
+          }
+        },
+        {
+          "name": "List Overrides",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/system-users/{{systemUserId}}/overrides/"
+          }
+        },
+        {
+          "name": "Create Override",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/system-users/{{systemUserId}}/overrides/create/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"{{permissionId}}\",\n  \"effect\": \"allow\",\n  \"reason\": \"Temporary access\",\n  \"expires_at\": \"2026-05-30T00:00:00Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Override Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/overrides/{{overrideId}}/"
+          }
+        },
+        {
+          "name": "Revoke Override",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/permissions/overrides/{{overrideId}}/revoke/"
           }
         }
       ]

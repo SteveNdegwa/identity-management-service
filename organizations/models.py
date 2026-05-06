@@ -49,6 +49,11 @@ class Organization(BaseModel):
 
 
 class OrganizationCountry(BaseModel):
+    class ApprovalStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
@@ -61,6 +66,27 @@ class OrganizationCountry(BaseModel):
     )
     registration_number = models.CharField(max_length=120, blank=True)
     tax_id = models.CharField(max_length=120, blank=True)
+    approval_status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.APPROVED,
+        db_index=True,
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        "accounts.SystemUser",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_organization_countries",
+    )
+    source_onboarding = models.ForeignKey(
+        "organizations.OrganizationOnboarding",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="country_results",
+    )
     is_active = models.BooleanField(default=True)
     activated_at = models.DateTimeField(auto_now_add=True)
 
@@ -162,14 +188,49 @@ class OnboardingStatus(models.TextChoices):
 
 
 class OrganizationOnboarding(BaseModel):
+    class OrganizationType(models.TextChoices):
+        BANK = "bank", "Bank"
+        MICROFINANCE_BANK = "microfinance_bank", "Microfinance Bank"
+        MICROFINANCE = "microfinance", "Microfinance"
+        MOBILE_LENDER = "mobile_lender", "Mobile Lender"
+        INSURANCE = "insurance", "Insurance"
+        SACCO = "sacco", "SACCO"
+        RESELLER = "reseller", "Reseller"
+        OTHER = "other", "Other"
+
+    class ProductNeed(models.TextChoices):
+        STATEMENT_ANALYSIS = "statement_analysis", "Statement analysis"
+        KYC_KYB_CHECKS = "kyc_kyb_checks", "KYC / KYB checks"
+        MACRO_INSIGHTS = "macro_insights", "Macro insights"
+        CUSTOM_DATA_ANALYSIS = "custom_data_analysis", "Custom data analysis"
+        FRAUD_CHECKS = "fraud_checks", "Fraud checks"
+
+    class MonthlyTransactionVolume(models.TextChoices):
+        BELOW_500 = "below_500", "Below 500"
+        FROM_501_TO_2500 = "501_to_2500", "501 - 2,500"
+        FROM_2501_TO_5000 = "2501_to_5000", "2,501 - 5,000"
+        FROM_5001_TO_10000 = "5001_to_10000", "5,001 - 10,000"
+        FROM_10001_TO_30000 = "10001_to_30000", "10,001 - 30,000"
+        ABOVE_30000 = "above_30000", "Above 30,000"
+
+    class StaffSize(models.TextChoices):
+        FROM_1_TO_5 = "1_to_5", "1-5"
+        FROM_6_TO_20 = "6_to_20", "6-20"
+        FROM_21_TO_50 = "21_to_50", "21-50"
+        FROM_50_TO_100 = "50_to_100", "50-100"
+        ABOVE_100 = "above_100", "Above 100"
+
+    class PainPoint(models.TextChoices):
+        MANUAL_ANALYSIS = "manual_analysis", "Manual analysis"
+        HIGH_NPL = "high_npl", "High NPL"
+        SLOW_CREDIT_DECISION = "slow_credit_decision", "Slow credit decision"
+        FRAUD = "fraud", "Fraud"
+        MANUAL_ONBOARDING = "manual_onboarding", "Manual onboarding"
+        MANUAL_VERIFICATIONS = "manual_verifications", "Manual verifications"
+
     system = models.ForeignKey(
         "systems.System",
         on_delete=models.CASCADE,
-        related_name="onboardings"
-    )
-    country = models.ForeignKey(
-        "base.Country",
-        on_delete=models.PROTECT,
         related_name="onboardings"
     )
     status = models.CharField(
@@ -183,11 +244,32 @@ class OrganizationOnboarding(BaseModel):
         on_delete=models.PROTECT,
         related_name="submitted_onboardings",
     )
+    organization = models.ForeignKey(
+        Organization,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="onboarding_requests",
+    )
     legal_name = models.CharField(max_length=255)
     trading_name = models.CharField(max_length=255, blank=True)
-    registration_number = models.CharField(max_length=120, blank=True)
-    tax_id = models.CharField(max_length=120, blank=True)
-    address = models.TextField(blank=True)
+    organization_type = models.CharField(
+        max_length=40,
+        choices=OrganizationType.choices,
+        blank=True,
+    )
+    products_needed = models.JSONField(default=list, blank=True)
+    monthly_transaction_volume = models.CharField(
+        max_length=20,
+        choices=MonthlyTransactionVolume.choices,
+        blank=True,
+    )
+    staff_size = models.CharField(
+        max_length=20,
+        choices=StaffSize.choices,
+        blank=True,
+    )
+    pain_points = models.JSONField(default=list, blank=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=30, blank=True)
     website = models.URLField(blank=True)
@@ -208,31 +290,53 @@ class OrganizationOnboarding(BaseModel):
 
     class Meta:
         db_table = "organizations_onboarding"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["system", "country", "contact_system_user"],
-                condition=models.Q(status__in=[
-                    "draft", "submitted", "documents_requested", "under_review", "approved",
-                ]),
-                name="unique_active_onboarding_per_contact",
-            )
-        ]
         indexes = [
             models.Index(fields=["system", "status"]),
             models.Index(fields=["contact_system_user"]),
-            models.Index(fields=["system", "country", "status"]),
         ]
 
     def __str__(self):
-        return f"{self.legal_name} / {self.country.code} — {self.status}"
+        return f"{self.legal_name} — {self.status}"
 
     @property
     def is_editable_by_applicant(self):
         return self.status in (OnboardingStatus.DRAFT, OnboardingStatus.DOCUMENTS_REQUESTED)
 
     @property
+    def editable_by_client(self):
+        return self.is_editable_by_applicant
+
+    @property
     def is_active(self):
         return self.status not in (OnboardingStatus.REJECTED, OnboardingStatus.ONBOARDED)
+
+
+class OrganizationOnboardingCountry(BaseModel):
+    onboarding = models.ForeignKey(
+        OrganizationOnboarding,
+        on_delete=models.CASCADE,
+        related_name="country_requests",
+    )
+    country = models.ForeignKey(
+        "base.Country",
+        on_delete=models.PROTECT,
+        related_name="onboarding_country_requests",
+    )
+    registration_number = models.CharField(max_length=120, blank=True)
+    tax_id = models.CharField(max_length=120, blank=True)
+    address = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "organizations_onboarding_country"
+        unique_together = [("onboarding", "country")]
+        indexes = [
+            models.Index(fields=["onboarding", "country"]),
+        ]
+        verbose_name_plural = "Onboarding countries"
+
+    def __str__(self):
+        return f"{self.onboarding.legal_name} / {self.country.code}"
 
 
 class DocumentType(models.TextChoices):

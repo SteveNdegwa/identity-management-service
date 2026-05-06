@@ -40,11 +40,24 @@ urlpatterns = [
     path("onboarding/", views.onboarding_create_view, name="onboarding-create"),
     path("onboarding/<str:onboarding_id>/", views.onboarding_detail_view, name="onboarding-detail"),
     path("onboarding/<str:onboarding_id>/update/", views.onboarding_update_view, name="onboarding-update"),
+    path("onboarding/<str:onboarding_id>/countries/add/", views.onboarding_country_add_view, name="onboarding-country-add"),
+    path("onboarding/countries/<str:country_request_id>/update/", views.onboarding_country_update_view, name="onboarding-country-update"),
+    path("onboarding/countries/<str:country_request_id>/remove/", views.onboarding_country_remove_view, name="onboarding-country-remove"),
+    path(
+        "<str:organization_id>/countries/onboarding/",
+        views.organization_country_onboarding_create_view,
+        name="organization-country-onboarding-create"
+    ),
     path("onboarding/<str:onboarding_id>/submit/", views.onboarding_submit_view, name="onboarding-submit"),
     path(
         "onboarding/<str:onboarding_id>/documents/upload/",
         views.onboarding_upload_document_view,
         name="onboarding-upload-document"
+    ),
+    path(
+        "onboarding/documents/<str:document_id>/remove/",
+        views.onboarding_remove_document_view,
+        name="onboarding-remove-document"
     ),
 
     # Reviewer / Admin flows

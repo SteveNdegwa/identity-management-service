@@ -1,7 +1,28 @@
 from django.contrib import admin
+from django import forms
 from django.utils.html import format_html
 
 from .models import System, SystemClient, SystemSettings, SystemWebhook
+from utils.social_providers import SocialProvider
+
+
+class SystemAdminForm(forms.ModelForm):
+    allowed_social_providers = forms.MultipleChoiceField(
+        choices=SocialProvider.choices,
+        required=False,
+        help_text="Supported providers are fixed for consistency.",
+    )
+
+    class Meta:
+        model = System
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["allowed_social_providers"].initial = self.instance.allowed_social_providers or []
+
+    def clean_allowed_social_providers(self):
+        return self.cleaned_data["allowed_social_providers"]
 
 
 class SystemClientInline(admin.TabularInline):
@@ -47,6 +68,7 @@ class SystemWebhookInline(admin.TabularInline):
 
 @admin.register(System)
 class SystemAdmin(admin.ModelAdmin):
+    form = SystemAdminForm
     list_display = (
         "name",
         "slug",
@@ -54,13 +76,17 @@ class SystemAdmin(admin.ModelAdmin):
         "password_type",
         "is_active_colored",
         "registration_open",
+        "allows_referrals",
         "mfa_required",
     )
     list_filter = (
         "is_active",
         "registration_open",
         "requires_approval",
+        "allows_referrals",
+        "auto_verify_referrals",
         "mfa_required",
+        "mfa_required_enforced",
         "password_type",
     )
     search_fields = (
@@ -90,6 +116,7 @@ class SystemAdmin(admin.ModelAdmin):
                 "description",
                 "logo_url",
                 "website",
+                "available_countries",
                 "is_active",
             )
         }),
@@ -100,6 +127,7 @@ class SystemAdmin(admin.ModelAdmin):
                 "allow_passwordless_login",
                 "allow_magic_link_login",
                 "allow_social_login",
+                "allowed_social_providers",
                 "passwordless_only",
             )
         }),
@@ -108,14 +136,22 @@ class SystemAdmin(admin.ModelAdmin):
                 "mfa_required",
                 "mfa_required_enforced",
                 "allowed_mfa_methods",
+                "mfa_reauth_window_minutes",
+            )
+        }),
+        ("Token Refresh", {
+            "fields": (
+                "refresh_token_timeout_minutes",
             )
         }),
         ("Rules", {
             "fields": (
                 "registration_open",
+                "auto_login_after_registration",
                 "requires_approval",
-                "required_identifier_types",
-                "allowed_login_identifier_types",
+                "allows_referrals",
+                "referral_reward_amount",
+                "auto_verify_referrals",
             )
         }),
         ("Audit", {
@@ -201,7 +237,6 @@ class SystemClientAdmin(admin.ModelAdmin):
         }),
         ("Overrides", {
             "fields": (
-                "override_allowed_login_identifier_types",
                 "override_allow_passwordless_login",
                 "override_allow_magic_link_login",
                 "override_allow_social_login",

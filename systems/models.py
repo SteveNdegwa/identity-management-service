@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from base.models import BaseModel, Realm
+from utils.social_providers import normalize_social_provider_list
 
 
 class System(BaseModel):
@@ -30,9 +31,6 @@ class System(BaseModel):
         related_name="available_systems",
     )
 
-    required_identifier_types = models.JSONField(default=list)
-    allowed_login_identifier_types = models.JSONField(default=list)
-
     password_type = models.CharField(
         max_length=10,
         choices=PasswordType.choices,
@@ -46,6 +44,7 @@ class System(BaseModel):
 
     allowed_social_providers = models.JSONField(default=list)
     registration_open = models.BooleanField(default=True)
+    auto_login_after_registration = models.BooleanField(default=False)
     requires_approval = models.BooleanField(default=False)
     allows_referrals = models.BooleanField(default=False)
     referral_reward_amount = models.DecimalField(
@@ -62,6 +61,24 @@ class System(BaseModel):
         help_text="Empty = all MFA methods permitted. Non-empty = restrict to listed methods.",
     )
 
+    refresh_token_timeout_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "If set, users must re-login for this system once their "
+            "refresh token has been unused for this many minutes — "
+            "even with an active SSO session.  NULL = silent reauth."
+        )
+    )
+    mfa_reauth_window_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "MFA must be re-verified for this system if no token "
+            "refresh has occurred within this window.  0 = disabled."
+        )
+    )
+
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -72,12 +89,13 @@ class System(BaseModel):
         return self.name
 
     def save(self, *args, **kwargs):
-        if self.pk:
+        if not self._state.adding:
             old = System.objects.get(pk=self.pk)
             if old.realm_id != self.realm_id:
                 raise ValidationError(
                     "System realm cannot be changed after creation."
                 )
+        self.allowed_social_providers = normalize_social_provider_list(self.allowed_social_providers)
         if self.allows_referrals and not self.registration_open:
             raise ValidationError(
                 "Referrals can only be enabled for systems that allow self-registration."
@@ -101,12 +119,6 @@ class System(BaseModel):
         if flow == "social":
             return self.allow_social_login
         return False
-
-    def is_identifier_type_allowed_for_login(self, identifier_type: str) -> bool:
-        if not self.allowed_login_identifier_types:
-            return True
-        return identifier_type in self.allowed_login_identifier_types
-
 
 class SystemClient(BaseModel):
     class ClientType(models.TextChoices):
@@ -134,7 +146,6 @@ class SystemClient(BaseModel):
     refresh_token_ttl = models.PositiveIntegerField(default=0)
     id_token_ttl = models.PositiveIntegerField(default=0)
 
-    override_allowed_login_identifier_types = models.JSONField(null=True, blank=True)
     override_allow_passwordless_login = models.BooleanField(null=True, blank=True)
     override_allow_magic_link_login = models.BooleanField(null=True, blank=True)
     override_allow_social_login = models.BooleanField(null=True, blank=True)
@@ -149,6 +160,13 @@ class SystemClient(BaseModel):
     def __str__(self):
         return f"{self.system.name}/{self.name} ({self.client_id[:10]}…)"
 
+    def save(self, *args, **kwargs):
+        if self.override_allowed_social_providers is not None:
+            self.override_allowed_social_providers = normalize_social_provider_list(
+                self.override_allowed_social_providers
+            )
+        super().save(*args, **kwargs)
+
     def get_effective_config(self) -> dict:
         system = self.system
 
@@ -156,10 +174,6 @@ class SystemClient(BaseModel):
             return client_val if client_val is not None else system_val
 
         return {
-            "allowed_login_identifier_types": resolve(
-                self.override_allowed_login_identifier_types,
-                system.allowed_login_identifier_types,
-            ),
             "allow_password_login": (
                     system.allow_password_login and not system.passwordless_only
             ),
@@ -181,6 +195,7 @@ class SystemClient(BaseModel):
             ),
             "passwordless_only": system.passwordless_only,
             "registration_open": system.registration_open,
+            "auto_login_after_registration": system.auto_login_after_registration,
             "requires_approval": system.requires_approval,
             "mfa_required": system.mfa_required,
             "allowed_mfa_methods": system.allowed_mfa_methods,

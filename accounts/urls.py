@@ -3,8 +3,20 @@ from . import views
 
 urlpatterns = [
     # Self-registration
+    path(
+        "register/identifiers/initiate/",
+        views.registration_identifier_initiate_view,
+        name="account-register-identifier-initiate"
+    ),
+    path(
+        "register/identifiers/verify/",
+        views.registration_identifier_verify_view,
+        name="account-register-identifier-verify"
+    ),
     path("register/", views.register_view, name="account-register"),
     path("register/link/", views.register_link_view, name="account-register-link"),
+    path("register/social/", views.register_social_view, name="account-register-social"),
+    path("register/social/link/", views.register_social_link_view, name="account-register-social-link"),
 
     # Claim (invite) flow
     path("claim/inspect/", views.claim_inspect_view, name="account-claim-inspect"),
@@ -20,6 +32,11 @@ urlpatterns = [
     # Identifier management
     path("me/identifiers/", views.identifier_list_view, name="account-identifiers"),
     path("me/identifiers/add/", views.identifier_add_view, name="account-identifier-add"),
+    path(
+        "me/identifiers/<str:identifier_id>/verify/initiate/",
+        views.identifier_verify_initiate_view,
+        name="account-identifier-verify-initiate"
+    ),
     path(
         "me/identifiers/<str:identifier_id>/verify/",
         views.identifier_verify_view,

@@ -2,13 +2,10 @@ from django.contrib import admin
 from django.utils.html import format_html
 
 from .models import (
-    BackupCode,
-    UserMFA,
     SSOSession,
     SSOSessionSystemAccess,
     SSOSessionMFAVerification,
     PendingContextMFA,
-    PendingMFAEnrollment,
     AuthorizationCode,
     TokenSet,
     AccessToken,
@@ -22,12 +19,14 @@ from .models import (
 class SSOSessionSystemAccessInline(admin.TabularInline):
     model = SSOSessionSystemAccess
     extra = 0
+    autocomplete_fields = ("system",)
     readonly_fields = ("last_accessed_at",)
 
 
 class SSOSessionMFAVerificationInline(admin.TabularInline):
     model = SSOSessionMFAVerification
     extra = 0
+    autocomplete_fields = ("system",)
     readonly_fields = ("verified_at",)
 
 
@@ -74,7 +73,6 @@ class SSOSessionAdmin(admin.ModelAdmin):
         "session_token_hash",
         "last_seen_at",
         "revoked_at",
-        "system_mfa_satisfied_at",
         "created_at",
         "updated_at",
     )
@@ -88,9 +86,10 @@ class SSOSessionAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Core", {"fields": ("user", "initiating_system", "auth_method")}),
+        ("Context", {"fields": ("country",)}),
         ("Device", {"fields": ("ip_address", "user_agent", "device_id", "device_name")}),
         ("Lifecycle", {"fields": ("is_active", "expires_at", "last_seen_at", "revoked_at", "revoke_reason")}),
-        ("MFA", {"fields": ("system_mfa_satisfied_at", "requires_reauth", "reauth_reason")}),
+        ("Reauthentication", {"fields": ("requires_reauth", "reauth_reason")}),
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )
 
@@ -110,37 +109,40 @@ class SSOSessionAdmin(admin.ModelAdmin):
         )
 
 
-@admin.register(UserMFA)
-class UserMFAAdmin(admin.ModelAdmin):
-    list_display = ("user", "method", "is_primary", "is_active", "verified_at")
-    list_filter = ("method", "is_primary", "is_active")
-    search_fields = ("credential_id", "delivery_target")
-
-    readonly_fields = (
-        "last_used_at",
-        "verified_at",
-        "created_at",
-        "updated_at",
+@admin.register(SSOSessionSystemAccess)
+class SSOSessionSystemAccessAdmin(admin.ModelAdmin):
+    list_display = (
+        "session",
+        "system",
+        "is_active",
+        "last_accessed_at",
+        "last_token_refreshed_at",
+        "last_mfa_verified_at",
     )
+    list_filter = ("is_active", "system")
+    search_fields = ("session__user__email", "session__device_id", "system__name")
+    autocomplete_fields = ("session", "system")
+    readonly_fields = ("last_accessed_at", "created_at", "updated_at")
 
     fieldsets = (
-        ("Core", {"fields": ("user", "method", "is_primary", "is_active")}),
-        ("Credentials", {"fields": ("secret", "credential_id", "delivery_target", "device_name")}),
-        ("Activity", {"fields": ("last_used_at", "verified_at")}),
+        ("Core", {"fields": ("session", "system", "is_active")}),
+        ("Lifecycle", {"fields": ("last_accessed_at", "revoked_at")}),
+        ("Refresh and MFA", {"fields": ("last_token_refreshed_at", "last_mfa_verified_at")}),
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )
 
 
-@admin.register(BackupCode)
-class BackupCodeAdmin(admin.ModelAdmin):
-    list_display = ("user", "is_used", "used_at", "invalidated_at")
-    list_filter = ("is_used",)
-
-    readonly_fields = ("created_at", "updated_at")
+@admin.register(SSOSessionMFAVerification)
+class SSOSessionMFAVerificationAdmin(admin.ModelAdmin):
+    list_display = ("session", "system", "method", "verified_at", "ip_address")
+    list_filter = ("method", "system")
+    search_fields = ("session__user__email", "session__device_id")
+    autocomplete_fields = ("session", "system")
+    readonly_fields = ("verified_at", "created_at", "updated_at")
 
     fieldsets = (
-        ("Core", {"fields": ("user", "code_hash", "is_used")}),
-        ("Usage", {"fields": ("used_at", "used_from_ip", "invalidated_at")}),
+        ("Core", {"fields": ("session", "system", "method")}),
+        ("Request", {"fields": ("ip_address", "verified_at")}),
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )
 
@@ -149,6 +151,8 @@ class BackupCodeAdmin(admin.ModelAdmin):
 class TokenSetAdmin(admin.ModelAdmin):
     list_display = ("user", "client", "is_active")
     list_filter = ("is_active",)
+    search_fields = ("user__email", "client__name", "client__client_id")
+    autocomplete_fields = ("sso_session", "user", "client", "system_user")
 
     inlines = (
         AccessTokenInline,
@@ -168,6 +172,8 @@ class TokenSetAdmin(admin.ModelAdmin):
 class AccessTokenAdmin(admin.ModelAdmin):
     list_display = ("token_set", "is_revoked", "expires_at")
     list_filter = ("is_revoked",)
+    search_fields = ("token_hash", "jti", "token_set__user__email")
+    autocomplete_fields = ("token_set",)
 
     readonly_fields = ("created_at", "updated_at")
 
@@ -183,6 +189,8 @@ class AccessTokenAdmin(admin.ModelAdmin):
 class RefreshTokenAdmin(admin.ModelAdmin):
     list_display = ("token_set", "is_used", "is_revoked", "expires_at")
     list_filter = ("is_used", "is_revoked")
+    search_fields = ("token_hash", "jti", "token_set__user__email")
+    autocomplete_fields = ("token_set", "rotated_to")
 
     readonly_fields = ("created_at", "updated_at")
 
@@ -198,11 +206,13 @@ class RefreshTokenAdmin(admin.ModelAdmin):
 class AuthorizationCodeAdmin(admin.ModelAdmin):
     list_display = ("user", "client", "is_used", "expires_at")
     list_filter = ("is_used",)
+    search_fields = ("code", "user__email", "client__name", "client__client_id")
+    autocomplete_fields = ("user", "client", "sso_session", "system_user")
 
     readonly_fields = ("created_at", "updated_at")
 
     fieldsets = (
-        ("Core", {"fields": ("code", "user", "client")}),
+        ("Core", {"fields": ("code", "user", "client", "sso_session", "system_user")}),
         ("OAuth", {"fields": ("redirect_uri", "scopes", "state", "nonce")}),
         ("PKCE", {"fields": ("code_challenge", "code_challenge_method")}),
         ("Lifecycle", {"fields": ("expires_at", "is_used", "used_at")}),
@@ -212,7 +222,9 @@ class AuthorizationCodeAdmin(admin.ModelAdmin):
 
 @admin.register(PendingContextMFA)
 class PendingContextMFAAdmin(admin.ModelAdmin):
-    list_display = ("session", "satisfied_at", "expires_at")
+    list_display = ("session", "system_user", "client", "satisfied_at", "expires_at")
+    search_fields = ("session__user__email", "system_user__user__email", "client__name")
+    autocomplete_fields = ("session", "system_user", "client")
 
     readonly_fields = ("created_at", "updated_at")
 
@@ -224,46 +236,39 @@ class PendingContextMFAAdmin(admin.ModelAdmin):
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )
 
-
-@admin.register(PendingMFAEnrollment)
-class PendingMFAEnrollmentAdmin(admin.ModelAdmin):
-    list_display = ("session", "completed_at", "expires_at")
-
-    readonly_fields = ("created_at", "updated_at")
-
-    fieldsets = (
-        ("Core", {"fields": ("session", "pending_context")}),
-        ("MFA", {"fields": ("required_by", "allowed_methods")}),
-        ("Lifecycle", {"fields": ("expires_at", "completed_at")}),
-        ("Audit", {"fields": ("created_at", "updated_at")}),
-    )
-
-
 @admin.register(PasswordlessChallenge)
 class PasswordlessChallengeAdmin(admin.ModelAdmin):
-    list_display = ("user", "purpose", "is_used", "expires_at")
+    list_display = ("user", "purpose", "contact_type", "delivery_target", "is_used", "expires_at")
     list_filter = ("purpose", "is_used")
+    search_fields = ("user__email", "delivery_target")
+    autocomplete_fields = ("user", "client", "sso_session")
 
     readonly_fields = ("created_at", "updated_at")
 
     fieldsets = (
-        ("Core", {"fields": ("user", "identifier", "client", "sso_session", "user_mfa")}),
+        ("Core", {"fields": ("user", "client", "sso_session")}),
+        ("Delivery", {"fields": ("contact_type", "delivery_target")}),
         ("Challenge", {"fields": ("purpose", "code_hash", "attempts")}),
         ("Lifecycle", {"fields": ("expires_at", "is_used", "used_at")}),
+        ("Request", {"fields": ("ip_requested", "ip_verified")}),
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )
 
 
 @admin.register(MagicLink)
 class MagicLinkAdmin(admin.ModelAdmin):
-    list_display = ("user", "is_used", "expires_at")
+    list_display = ("user", "client", "contact_type", "delivery_target", "is_used", "expires_at")
     list_filter = ("is_used",)
+    search_fields = ("user__email", "delivery_target", "token_hash")
+    autocomplete_fields = ("user", "client")
 
     readonly_fields = ("created_at", "updated_at")
 
     fieldsets = (
-        ("Core", {"fields": ("user", "identifier", "client", "token_hash")}),
+        ("Core", {"fields": ("user", "client", "token_hash")}),
+        ("Delivery", {"fields": ("contact_type", "delivery_target")}),
         ("Lifecycle", {"fields": ("scopes", "expires_at", "is_used", "used_at")}),
+        ("Request", {"fields": ("ip_requested", "ip_used")}),
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )
 
@@ -271,6 +276,8 @@ class MagicLinkAdmin(admin.ModelAdmin):
 @admin.register(LoginContextSelection)
 class LoginContextSelectionAdmin(admin.ModelAdmin):
     list_display = ("sso_session", "organization", "country", "role", "selected_at")
+    search_fields = ("sso_session__user__email", "system_user__user__email", "organization__name", "role__name")
+    autocomplete_fields = ("sso_session", "system_user", "organization", "country", "role")
 
     readonly_fields = ("created_at", "updated_at")
 
