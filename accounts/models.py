@@ -98,7 +98,7 @@ class UserManager(BaseUserManager):
         return self._create_user(realm, email, phone_number, password, None, **extra_fields)
 
     def get_by_identifier(self, realm: Realm, value: str, identifier_type: IdentifierType) -> "User":
-        from identifier_utils import IdentifierNormaliser
+        from accounts.identifier_utils import IdentifierNormaliser
         if identifier_type not in IdentifierType.values:
             raise ValueError("Invalid identifier type.")
 
@@ -107,7 +107,13 @@ class UserManager(BaseUserManager):
             raise User.DoesNotExist("Identifier is required.")
 
         if identifier_type == IdentifierType.PHONE:
-            return self.get(realm=realm, phone_number=normalised)
+            return self.get(
+                models.Q(realm=realm)
+                & (
+                    models.Q(phone_number=normalised)
+                    | models.Q(phone_number=value.strip())
+                )
+            )
         return self.get(realm=realm, email=normalised)
 
 

@@ -10,6 +10,7 @@ from accounts.services.account_service import (
     AccountService,
     ClaimError,
     ClaimExpiredError,
+    ClaimLinkConfirmationRequired,
     InvalidClaimTokenError,
     LinkAccountRequired,
     ManageIdentifierError,
@@ -525,11 +526,28 @@ def claim_view(request: ExtendedRequest) -> JsonResponse:
             pin=data.get("pin"),
             phone_number=data.get("phone_number"),
             country=_get_country(data),
+            confirm_link_existing_user=data.get("confirm_link_existing_user", False),
+            update_email=data.get("update_email", False),
             ip_address=request.client_ip,
             **_profile_fields(data),
             **_verification_ids(data),
         )
         return ResponseProvider.success(**_system_user_payload(su))
+    except ClaimLinkConfirmationRequired as e:
+        return ResponseProvider.conflict(
+            link_confirmation_required=True,
+            matched_on=e.matched_on,
+            invite_email=e.invite_email,
+            update_email_available=True,
+            existing_user={
+                "user_id": str(e.existing_user.id),
+                "email": account_service._mask_email(e.existing_user.email),
+                "phone_number": account_service._mask_phone(e.existing_user.phone_number),
+                "first_name": e.existing_user.first_name,
+                "last_name": e.existing_user.last_name,
+            },
+            message=str(e),
+        )
     except (ClaimError, InvalidClaimTokenError, ClaimExpiredError, RegistrationClosedError) as e:
         return ResponseProvider.bad_request(error="claim_error", message=str(e))
     except Exception as e:

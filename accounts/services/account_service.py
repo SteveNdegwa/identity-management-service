@@ -61,6 +61,14 @@ class SystemUserStatusError(ClaimError):
     pass
 
 
+class ClaimLinkConfirmationRequired(ClaimError):
+    def __init__(self, existing_user: User, matched_on: str, invite_email: str):
+        self.existing_user = existing_user
+        self.matched_on = matched_on
+        self.invite_email = invite_email
+        super().__init__("Existing account found. Confirm before linking this invite.")
+
+
 class ManageIdentifierError(AccountServiceError):
     pass
 
@@ -235,6 +243,8 @@ class AccountService:
             country: Optional[Country] = None,
             email_verification_id: Optional[str] = None,
             phone_verification_id: Optional[str] = None,
+            confirm_link_existing_user: bool = False,
+            update_email: bool = False,
             ip_address: str = "",
     ) -> SystemUser:
         su = self._get_claimable_system_user(lookup_id, token)
@@ -257,35 +267,50 @@ class AccountService:
             if not phone_number:
                 raise ClaimError("Phone number is required.")
 
-            if self._find_user_by_phone(phone_number, system.realm):
-                raise ClaimError("Phone number already exists.")
+            phone_user = self._find_user_by_phone(phone_number, system.realm)
+            if phone_user and not confirm_link_existing_user:
+                raise ClaimLinkConfirmationRequired(
+                    existing_user=phone_user,
+                    matched_on=IdentifierType.PHONE,
+                    invite_email=su.provisioning_email,
+                )
 
-            verified = self._validated_contact_verifications(
-                email=su.provisioning_email,
-                phone_number=phone_number,
-                email_verification_id=email_verification_id,
-                phone_verification_id=phone_verification_id,
-                require_email_verification=False,
-            )
+            try:
+                verified = self._validated_contact_verifications(
+                    email=su.provisioning_email,
+                    phone_number=phone_number,
+                    email_verification_id=email_verification_id,
+                    phone_verification_id=phone_verification_id,
+                    require_email_verification=False,
+                )
+            except SelfRegistrationError as exc:
+                raise ClaimError(str(exc))
 
-            password, pin = self._resolve_credentials(system, password, pin)
+            if phone_user:
+                user = phone_user
+                self._ensure_credentials_if_needed(user, system, password, pin)
+                self._apply_verified_contacts(user, verified)
+                if update_email:
+                    self._replace_email_from_claim(user, su.provisioning_email, system.realm)
+            else:
+                password, pin = self._resolve_credentials(system, password, pin)
 
-            user = User.objects.create_user(
-                realm=system.realm,
-                email=su.provisioning_email,
-                phone_number=phone_number,
-                password=password,
-                pin=pin,
-                primary_country=country or su.country,
-                first_name=first_name,
-                last_name=last_name,
-                middle_name=middle_name,
-                display_name=display_name or f"{first_name} {last_name}".strip(),
-                date_of_birth=date_of_birth,
-                gender=gender,
-            )
+                user = User.objects.create_user(
+                    realm=system.realm,
+                    email=su.provisioning_email,
+                    phone_number=phone_number,
+                    password=password,
+                    pin=pin,
+                    primary_country=country or su.country,
+                    first_name=first_name,
+                    last_name=last_name,
+                    middle_name=middle_name,
+                    display_name=display_name or f"{first_name} {last_name}".strip(),
+                    date_of_birth=date_of_birth,
+                    gender=gender,
+                )
 
-            self._apply_verified_contacts(user, verified)
+                self._apply_verified_contacts(user, verified)
 
         else:
             raise ClaimError("Invalid claim_action. Must be 'link' or  'new'.")
@@ -834,6 +859,21 @@ class AccountService:
         user.email_verified = True
         user.email_verified_at = now
         user.save(update_fields=["email_verified", "email_verified_at"])
+
+    def _replace_email_from_claim(self, user: User, email: str, realm: Realm) -> None:
+        email = (email or "").strip().lower()
+        if not email or user.email == email:
+            self._mark_email_verified(user, email)
+            return
+
+        existing_user = self._find_user_by_email(email, realm)
+        if existing_user and existing_user.id != user.id:
+            raise ClaimError("Invite email is already linked to another user.")
+
+        user.email = email
+        user.email_verified = True
+        user.email_verified_at = timezone.now()
+        user.save(update_fields=["email", "email_verified", "email_verified_at"])
 
     def _apply_verified_contacts(self, user: User, verified: dict) -> None:
         updates = []

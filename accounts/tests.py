@@ -4,7 +4,11 @@ from datetime import date
 from django.test import TestCase
 
 from accounts.models import SocialAccount, SystemUser, User
-from accounts.services.account_service import AccountService, SelfRegistrationError
+from accounts.services.account_service import (
+    AccountService,
+    ClaimLinkConfirmationRequired,
+    SelfRegistrationError,
+)
 from accounts.services.identifier_verification_service import IdentifierVerificationService
 from base.models import Country, Realm
 from organizations.models import Organization
@@ -61,7 +65,6 @@ class AccountFlowTests(TestCase):
             email_verification_id=str(email_verification.id),
             phone_verification_id=str(phone_verification.id),
             primary_country=self.country,
-            organization=self.organization,
         )
 
         self.assertTrue(user.email_verified)
@@ -90,7 +93,6 @@ class AccountFlowTests(TestCase):
                 email="ada@example.com",
                 email_verification_id=str(email_verification.id),
                 primary_country=self.country,
-                organization=self.organization,
             )
 
     def test_social_registration_creates_social_account(self):
@@ -117,7 +119,6 @@ class AccountFlowTests(TestCase):
             email_verification_id=str(email_verification.id),
             phone_verification_id=str(phone_verification.id),
             primary_country=self.country,
-            organization=self.organization,
         )
 
         self.assertTrue(SocialAccount.objects.filter(user=user, provider="google", uid="google-subject-1").exists())
@@ -228,3 +229,146 @@ class AccountFlowTests(TestCase):
         self.assertEqual(claimed_system_user.user, existing_user)
         self.assertTrue(existing_user.email_verified)
         self.assertIsNotNone(existing_user.email_verified_at)
+
+    def test_claim_new_links_existing_phone_without_updating_email(self):
+        inviter = User.objects.create_user(
+            realm=self.realm,
+            email="inviter@example.com",
+            phone_number="+254700000001",
+            password="Secret123!",
+        )
+        inviter_system_user = SystemUser.objects.create(
+            user=inviter,
+            system=self.system,
+            organization=self.organization,
+            country=self.country,
+            role=self.role,
+            status="active",
+            provisioning_email=inviter.email,
+        )
+        existing_user = User.objects.create_user(
+            realm=self.realm,
+            email="old-org@example.com",
+            phone_number="+254715013272",
+            password="Secret123!",
+        )
+        invited_system_user = SystemUser.objects.create(
+            system=self.system,
+            organization=self.organization,
+            country=self.country,
+            role=self.role,
+            provisioned_by=inviter_system_user,
+            provisioning_email="new-org@example.com",
+            status="pending",
+        )
+        lookup_id, token = self.account_service.invite(
+            system_user=invited_system_user,
+            invited_by=inviter_system_user,
+        )
+
+        phone_verification = self.verification_service.initiate_registration_verification("phone", "+254715013272")
+        phone_verification.code_hash = hashlib.sha256("123456".encode()).hexdigest()
+        phone_verification.save(update_fields=["code_hash"])
+        phone_verification = self.verification_service.verify_registration_verification(
+            verification_id=str(phone_verification.id),
+            code="123456",
+        )
+
+        with self.assertRaises(ClaimLinkConfirmationRequired):
+            self.account_service.claim_user(
+                lookup_id=lookup_id,
+                token=token,
+                claim_action="new",
+                phone_number="+254715013272",
+                first_name="Grace",
+                last_name="Hopper",
+                date_of_birth=date(1990, 1, 1),
+                gender="female",
+                country=self.country,
+                phone_verification_id=str(phone_verification.id),
+            )
+
+        claimed_system_user = self.account_service.claim_user(
+            lookup_id=lookup_id,
+            token=token,
+            claim_action="new",
+            phone_number="+254715013272",
+            first_name="Grace",
+            last_name="Hopper",
+            date_of_birth=date(1990, 1, 1),
+            gender="female",
+            country=self.country,
+            phone_verification_id=str(phone_verification.id),
+            confirm_link_existing_user=True,
+        )
+
+        existing_user.refresh_from_db()
+        self.assertEqual(claimed_system_user.user, existing_user)
+        self.assertEqual(existing_user.email, "old-org@example.com")
+        self.assertTrue(existing_user.phone_verified)
+        self.assertFalse(User.objects.filter(email="new-org@example.com").exists())
+
+    def test_claim_new_links_existing_phone_and_updates_email_when_requested(self):
+        inviter = User.objects.create_user(
+            realm=self.realm,
+            email="inviter@example.com",
+            phone_number="+254700000001",
+            password="Secret123!",
+        )
+        inviter_system_user = SystemUser.objects.create(
+            user=inviter,
+            system=self.system,
+            organization=self.organization,
+            country=self.country,
+            role=self.role,
+            status="active",
+            provisioning_email=inviter.email,
+        )
+        existing_user = User.objects.create_user(
+            realm=self.realm,
+            email="old-org@example.com",
+            phone_number="+254715013273",
+            password="Secret123!",
+        )
+        invited_system_user = SystemUser.objects.create(
+            system=self.system,
+            organization=self.organization,
+            country=self.country,
+            role=self.role,
+            provisioned_by=inviter_system_user,
+            provisioning_email="new-org@example.com",
+            status="pending",
+        )
+        lookup_id, token = self.account_service.invite(
+            system_user=invited_system_user,
+            invited_by=inviter_system_user,
+        )
+
+        phone_verification = self.verification_service.initiate_registration_verification("phone", "+254715013273")
+        phone_verification.code_hash = hashlib.sha256("123456".encode()).hexdigest()
+        phone_verification.save(update_fields=["code_hash"])
+        phone_verification = self.verification_service.verify_registration_verification(
+            verification_id=str(phone_verification.id),
+            code="123456",
+        )
+
+        claimed_system_user = self.account_service.claim_user(
+            lookup_id=lookup_id,
+            token=token,
+            claim_action="new",
+            phone_number="+254715013273",
+            first_name="Grace",
+            last_name="Hopper",
+            date_of_birth=date(1990, 1, 1),
+            gender="female",
+            country=self.country,
+            phone_verification_id=str(phone_verification.id),
+            confirm_link_existing_user=True,
+            update_email=True,
+        )
+
+        existing_user.refresh_from_db()
+        self.assertEqual(claimed_system_user.user, existing_user)
+        self.assertEqual(existing_user.email, "new-org@example.com")
+        self.assertTrue(existing_user.email_verified)
+        self.assertTrue(existing_user.phone_verified)

@@ -334,7 +334,7 @@
             "url": "{{baseUrl}}/api/accounts/claim/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"lookup_id\": \"{{lookupId}}\",\n  \"token\": \"{{claimToken}}\",\n  \"claim_action\": \"link\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"phone_number\": \"+254700000000\",\n  \"country_id\": \"{{countryId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  }\n}"
+              "raw": "{\n  \"lookup_id\": \"{{lookupId}}\",\n  \"token\": \"{{claimToken}}\",\n  \"claim_action\": \"link\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"phone_number\": \"+254700000000\",\n  \"country_id\": \"{{countryId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  },\n  \"update_email\": false,\n  \"confirm_link_existing_user\": false\n}"
             }
           }
         },
