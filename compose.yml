@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    command: gunicorn --bind 0.0.0.0:8000 --timeout 300 spin_identity.wsgi:application -w 2
+    working_dir: /usr/src/app
+    ports:
+      - 8000:8000
+    environment:
+      - ENV=local
+      - DEBUG=1
+      - ALLOWED_HOSTS=*
+      - SECRET_KEY=django-insecure-5^@b+7%p-cmdjazo5h1@)ld!d!p4_=czm@0+3jmh(*&!8x7$$g5
+      - APP_PATH=/var/www/idms
+    volumes:
+      - .:/usr/src/app
+    networks:
+      - idms_net
+
+networks:
+  idms_net:

@@ -29,6 +29,10 @@ class GatewayControlMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # k8s probes hit /healthz before migrations run; never touch the DB here.
+        if request.path == '/healthz':
+            return self.get_response(request)
+
         if any(request.path.startswith(p) for p in ['/api/']):
             request._dont_enforce_csrf_checks = True
 
