@@ -110,6 +110,22 @@ def _get_onboarding_country(country_request_id: str) -> Optional[OrganizationOnb
         return None
 
 
+def _branch_payload(branch: Branch) -> dict:
+    return {
+        "id": str(branch.id),
+        "country": {
+            "id": str(branch.country.id),
+            "name": branch.country.name,
+            "code": branch.country.code,
+        },
+        "name": branch.name,
+        "code": branch.code,
+        "parent_id": str(branch.parent_id) if branch.parent_id else None,
+        "is_active": branch.is_active,
+        "metadata": branch.metadata,
+    }
+
+
 def _organization_payload(org: Organization) -> dict:
     return {
         "id": str(org.id),
@@ -126,6 +142,10 @@ def _organization_payload(org: Organization) -> dict:
         "countries": [
             _org_country_payload(country)
             for country in org.organization_countries.select_related("country").order_by("country__name")
+        ],
+        "branches": [
+            _branch_payload(branch)
+            for branch in org.branches.select_related("country", "parent").order_by("country__name", "name")
         ],
     }
 
