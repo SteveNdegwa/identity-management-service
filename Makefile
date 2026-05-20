@@ -2,7 +2,11 @@
 SHELL := /bin/bash
 
 UV       ?= uv
-PYTHON   := $(UV) run python
+ENV_FILE ?= .env.local
+# Only pass --env-file when the file exists (keeps CI happy without one).
+ENV_ARG  := $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE),)
+UV_RUN   := $(UV) run $(ENV_ARG)
+PYTHON   := $(UV_RUN) python
 MANAGE   := $(PYTHON) manage.py
 PORT     ?= 8000
 
@@ -53,15 +57,15 @@ test: ## Run the Django test suite
 	$(MANAGE) test
 
 lint: ## Check code with ruff (no changes)
-	$(UV) run ruff check .
-	$(UV) run ruff format --check .
+	$(UV_RUN) ruff check .
+	$(UV_RUN) ruff format --check .
 
 format: ## Auto-format code with ruff
-	$(UV) run ruff format .
+	$(UV_RUN) ruff format .
 
 fix: ## Auto-fix lint issues and format
-	$(UV) run ruff check --fix .
-	$(UV) run ruff format .
+	$(UV_RUN) ruff check --fix .
+	$(UV_RUN) ruff format .
 
 check: lint test ## Run lint + tests (local pre-commit gate)
 
