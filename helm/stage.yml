@@ -46,7 +46,7 @@ readinessProbe:
 
 volumeMounts:
   - name: staticfiles
-    mountPath: /var/www/idms
+    mountPath: /var/www/v3-idms
   - name: nginx-conf
     mountPath: /etc/nginx/conf.d
     readOnly: true
@@ -54,7 +54,7 @@ volumeMounts:
 volumes:
   - name: nginx-conf
     configMap:
-      name: idms-nginx-config
+      name: v3-idms-nginx-config
   - name: staticfiles
     emptyDir: {}
 
@@ -72,7 +72,7 @@ sidecarimage:
       mountPath: /etc/nginx/conf.d
       readOnly: true
     - name: staticfiles
-      mountPath: /var/www/idms
+      mountPath: /var/www/v3-idms
   livenessProbe:
     path: /nghealthz
     port: 80
@@ -104,7 +104,7 @@ service:
   targetPort: http
 
 configMaps:
-  - name: idms-nginx-config
+  - name: v3-idms-nginx-config
     data:
       backend.conf: |-
         upstream app_server {
@@ -113,7 +113,7 @@ configMaps:
         }
         server {
             listen 80;
-            root /var/www/idms;
+            root /var/www/v3-idms;
             client_max_body_size 100M;
 
             access_log stdout;
@@ -160,7 +160,7 @@ ingress:
         - path: /
           pathType: ImplementationSpecific
   tls:
-    - secretName: stage-idms-tls
+    - secretName: stage-v3-idms-tls
       hosts:
         - stage-idms.spinmobile.co
 
@@ -193,12 +193,12 @@ initContainer:
   enabled: true
   name: collectstatic
   image:
-    repository: registry.gitlab.com/spin_mobile/idms
+    repository: registry.gitlab.com/spin_mobile/v3-idms
     tag: latest
   commands: ["python", "manage.py", "collectstatic", "--no-input"]
   volumeMounts:
     - name: staticfiles
-      mountPath: /var/www/idms
+      mountPath: /var/www/v3-idms
   resources:
     limits:
       cpu: 500m
@@ -208,34 +208,34 @@ initContainer:
       memory: 64Mi
 
 externalSecrets:
-  - name: idms-secrets
+  - name: v3-idms-secrets
     refreshInterval: 5m
     secretStoreRefName: vault-backend
-    targetName: idms-secrets
-    dataKey: stage/ke/idms-secrets
+    targetName: v3-idms-secrets
+    dataKey: stage/ke/v3-idms-secrets
 
 env:
   ENV: stage
   DEBUG: "true"
-  APP_PATH: /var/www/idms
-  DATABASE_DB: idms
+  APP_PATH: /var/www/v3-idms
+  DATABASE_DB: v3-idms
 
 secretEnv:
   DATABASE_PASSWORD:
-    name: idms-secrets
+    name: v3-idms-secrets
     key: db-password
   DATABASE_HOST:
-    name: idms-secrets
+    name: v3-idms-secrets
     key: db-host
   DATABASE_PORT:
-    name: idms-secrets
+    name: v3-idms-secrets
     key: db-port
   DATABASE_DB:
-    name: idms-secrets
+    name: v3-idms-secrets
     key: db-name
   DATABASE_USER:
-    name: idms-secrets
+    name: v3-idms-secrets
     key: db-user
   SECRET_KEY:
-    name: idms-secrets
+    name: v3-idms-secrets
     key: secret-key
