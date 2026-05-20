@@ -32,7 +32,7 @@ livenessProbe:
   timeoutSeconds: 60
   httpHeaders:
     - name: Host
-      value: stage-idms.spinmobile.co
+      value: stage-identity.spinmobile.co
 
 readinessProbe:
   path: /healthz
@@ -42,11 +42,11 @@ readinessProbe:
   timeoutSeconds: 60
   httpHeaders:
     - name: Host
-      value: stage-idms.spinmobile.co
+      value: stage-identity.spinmobile.co
 
 volumeMounts:
   - name: staticfiles
-    mountPath: /var/www/v3-idms
+    mountPath: /var/www/idms
   - name: nginx-conf
     mountPath: /etc/nginx/conf.d
     readOnly: true
@@ -61,7 +61,7 @@ volumes:
 sidecarimage:
   name: nginx
   repository: nginx
-  tag: stable
+  tag: 1.31-alpine
   pullPolicy: IfNotPresent
   ports:
     - name: http
@@ -72,7 +72,7 @@ sidecarimage:
       mountPath: /etc/nginx/conf.d
       readOnly: true
     - name: staticfiles
-      mountPath: /var/www/v3-idms
+      mountPath: /var/www/idms
   livenessProbe:
     path: /nghealthz
     port: 80
@@ -113,7 +113,7 @@ configMaps:
         }
         server {
             listen 80;
-            root /var/www/v3-idms;
+            root /var/www/idms;
             client_max_body_size 100M;
 
             access_log stdout;
@@ -155,14 +155,14 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod-issuer
   hosts:
-    - host: stage-idms.spinmobile.co
+    - host: stage-identity.spinmobile.co
       paths:
         - path: /
           pathType: ImplementationSpecific
   tls:
     - secretName: stage-v3-idms-tls
       hosts:
-        - stage-idms.spinmobile.co
+        - stage-identity.spinmobile.co
 
 resources:
   limits:
@@ -176,8 +176,8 @@ autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 4
-  targetCPUUtilizationPercentage: 750
-  targetMemoryUtilizationPercentage: 750
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
 
 pdb:
   enabled: true
@@ -193,12 +193,12 @@ initContainer:
   enabled: true
   name: collectstatic
   image:
-    repository: registry.gitlab.com/spin_mobile/v3-idms
+    repository: registry.gitlab.com/spin_mobile/idms
     tag: latest
   commands: ["python", "manage.py", "collectstatic", "--no-input"]
   volumeMounts:
     - name: staticfiles
-      mountPath: /var/www/v3-idms
+      mountPath: /var/www/idms
   resources:
     limits:
       cpu: 500m
@@ -216,8 +216,8 @@ externalSecrets:
 
 env:
   ENV: stage
-  DEBUG: "true"
-  APP_PATH: /var/www/v3-idms
+  DEBUG: "false"
+  APP_PATH: /var/www/idms
   DATABASE_DB: v3-idms
 
 secretEnv:
