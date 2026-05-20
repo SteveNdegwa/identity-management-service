@@ -82,7 +82,7 @@ jobs:
         run: |
           helm repo add spinm https://etowett.github.io/helm-charts
           [[ -d app ]] && rm -rf app
-          helm fetch spinm/app --version 1.3.1 --untar
+          helm fetch spinm/app --version 1.4.0 --untar
 
           helm template idms ./app \
             --set image.tag=${TAG} \
