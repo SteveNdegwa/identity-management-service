@@ -57,7 +57,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: registry.gitlab.com/spin_mobile/idms:${{ steps.tag.outputs.image_tag }}
           severity: HIGH,CRITICAL
@@ -66,7 +66,7 @@ jobs:
           vuln-type: 'os,library'
 
       - name: Install yq
-        uses: mikefarah/yq@v4.44.3
+        uses: mikefarah/yq@v4.53.2
 
       - name: Set up helm
         uses: azure/setup-helm@v5
