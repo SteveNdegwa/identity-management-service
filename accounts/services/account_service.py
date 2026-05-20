@@ -488,6 +488,7 @@ class AccountService:
         email_verification_id: str | None = None,
         phone_verification_id: str | None = None,
         primary_country: Country | None = None,
+        organization: Organization | None = None,
         referral_code: str | None = None,
         ip_address: str = '',
     ) -> tuple[User, SystemUser]:
@@ -536,6 +537,7 @@ class AccountService:
                 refresh_token=refresh_token,
                 extra_data=extra_data,
                 primary_country=primary_country,
+                organization=organization,
                 referral_code=referral_code,
                 ip_address=ip_address,
             )
@@ -580,6 +582,7 @@ class AccountService:
             user=user,
             system=system,
             role=role,
+            organization=organization,
             primary_country=primary_country,
         )
 
@@ -610,6 +613,7 @@ class AccountService:
         refresh_token: str = '',
         extra_data: dict | None = None,
         primary_country: Country | None = None,
+        organization: Organization | None = None,
         referral_code: str | None = None,
         ip_address: str = '',
     ) -> tuple[User, SystemUser]:
@@ -639,6 +643,7 @@ class AccountService:
             user=existing_user,
             system=system,
             role=role,
+            organization=organization,
             primary_country=primary_country,
         )
 
