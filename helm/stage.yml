@@ -216,9 +216,8 @@ externalSecrets:
 
 env:
   ENV: stage
-  DEBUG: "false"
+  DEBUG: "true"
   APP_PATH: /var/www/idms
-  DATABASE_DB: v3-idms
 
 secretEnv:
   DATABASE_PASSWORD:
