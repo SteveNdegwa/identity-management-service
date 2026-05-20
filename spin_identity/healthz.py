@@ -1,6 +1,7 @@
+import os
+
 from django.http import JsonResponse
 
-import os
 
 class HealthCheckMiddleware:
     def __init__(self, get_response):
@@ -8,9 +9,11 @@ class HealthCheckMiddleware:
 
     def __call__(self, request):
         if request.path == '/healthz':
-            return JsonResponse({
-                "success": True,
-                "app_name": 'idms',
-                "env": os.environ.get('ENV'),
-            })
+            return JsonResponse(
+                {
+                    'success': True,
+                    'app_name': 'idms',
+                    'env': os.environ.get('ENV'),
+                }
+            )
         return self.get_response(request)

@@ -1,5 +1,5 @@
-from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth import get_user_model
+from django.contrib.auth.backends import ModelBackend
 
 from base.models import Realm
 
@@ -9,7 +9,7 @@ class RealmModelBackend(ModelBackend):
         UserModel = get_user_model()
         login_value = username or kwargs.get(UserModel.USERNAME_FIELD)
 
-        realm, _ = Realm.objects.get_or_create(name="Admin")
+        realm, _ = Realm.objects.get_or_create(name='Admin')
 
         if not login_value or password is None:
             return None
@@ -19,7 +19,7 @@ class RealmModelBackend(ModelBackend):
                 realm=realm,
                 **{UserModel.USERNAME_FIELD: login_value},
             )
-        except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
+        except UserModel.DoesNotExist, UserModel.MultipleObjectsReturned:
             UserModel().set_password(password)
             return None
 

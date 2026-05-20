@@ -1,5 +1,4 @@
 import secrets
-from typing import Optional
 
 import bcrypt
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
@@ -8,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from base.models import BaseModel, SoftDeleteModel, Realm
+from base.models import BaseModel, Realm, SoftDeleteModel
 from utils.social_providers import SocialProvider
 
 
@@ -17,33 +16,33 @@ def generate_claim_lookup_id() -> str:
 
 
 class Gender(models.TextChoices):
-    MALE = "male", "Male"
-    FEMALE = "female", "Female"
-    OTHER = "other", "Other"
-    PREFER_NOT = "prefer_not", "Prefer not to say"
+    MALE = 'male', 'Male'
+    FEMALE = 'female', 'Female'
+    OTHER = 'other', 'Other'
+    PREFER_NOT = 'prefer_not', 'Prefer not to say'
 
 
 class IdentifierType(models.TextChoices):
-    EMAIL = "email", "Email Address"
-    PHONE = "phone", "Phone Number"
+    EMAIL = 'email', 'Email Address'
+    PHONE = 'phone', 'Phone Number'
 
 
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
     def _create_user(
-            self,
-            realm: Realm,
-            email: str,
-            phone_number: str,
-            password: Optional[str],
-            pin: Optional[str],
-            **extra_fields,
+        self,
+        realm: Realm,
+        email: str,
+        phone_number: str,
+        password: str | None,
+        pin: str | None,
+        **extra_fields,
     ):
         if not email:
-            raise ValueError("Email is required.")
+            raise ValueError('Email is required.')
         if not phone_number:
-            raise ValueError("Phone number is required.")
+            raise ValueError('Phone number is required.')
 
         user = self.model(
             realm=realm,
@@ -64,55 +63,53 @@ class UserManager(BaseUserManager):
         return user
 
     def create_user(
-            self,
-            realm: Realm,
-            email: str,
-            phone_number: str,
-            password: Optional[str] = None,
-            pin: Optional[str] = None,
-            **extra_fields,
+        self,
+        realm: Realm,
+        email: str,
+        phone_number: str,
+        password: str | None = None,
+        pin: str | None = None,
+        **extra_fields,
     ):
-        extra_fields.setdefault("is_staff", False)
-        extra_fields.setdefault("is_superuser", False)
-        extra_fields.setdefault("is_active", True)
+        extra_fields.setdefault('is_staff', False)
+        extra_fields.setdefault('is_superuser', False)
+        extra_fields.setdefault('is_active', True)
         return self._create_user(realm, email, phone_number, password, pin, **extra_fields)
 
     def create_superuser(
-            self,
-            email: str,
-            phone_number: str,
-            password: str,
-            **extra_fields,
+        self,
+        email: str,
+        phone_number: str,
+        password: str,
+        **extra_fields,
     ):
-        extra_fields.setdefault("is_staff", True)
-        extra_fields.setdefault("is_superuser", True)
-        extra_fields.setdefault("is_active", True)
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
 
-        if extra_fields.get("is_staff") is not True:
-            raise ValueError("Superuser must have is_staff=True.")
-        if extra_fields.get("is_superuser") is not True:
-            raise ValueError("Superuser must have is_superuser=True.")
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
 
-        realm, _ = Realm.objects.get_or_create(name="Admin")
+        realm, _ = Realm.objects.get_or_create(name='Admin')
 
         return self._create_user(realm, email, phone_number, password, None, **extra_fields)
 
-    def get_by_identifier(self, realm: Realm, value: str, identifier_type: IdentifierType) -> "User":
+    def get_by_identifier(self, realm: Realm, value: str, identifier_type: IdentifierType) -> User:
         from accounts.identifier_utils import IdentifierNormaliser
+
         if identifier_type not in IdentifierType.values:
-            raise ValueError("Invalid identifier type.")
+            raise ValueError('Invalid identifier type.')
 
         normalised = IdentifierNormaliser.normalise(value, identifier_type)
         if not normalised:
-            raise User.DoesNotExist("Identifier is required.")
+            raise User.DoesNotExist('Identifier is required.')
 
         if identifier_type == IdentifierType.PHONE:
             return self.get(
                 models.Q(realm=realm)
-                & (
-                    models.Q(phone_number=normalised)
-                    | models.Q(phone_number=value.strip())
-                )
+                & (models.Q(phone_number=normalised) | models.Q(phone_number=value.strip()))
             )
         return self.get(realm=realm, email=normalised)
 
@@ -121,14 +118,14 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
     realm = models.ForeignKey(
         Realm,
         on_delete=models.PROTECT,
-        related_name="users",
+        related_name='users',
     )
     primary_country = models.ForeignKey(
-        "base.Country",
+        'base.Country',
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="primary_users",
+        related_name='primary_users',
     )
 
     email = models.EmailField()
@@ -155,19 +152,19 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
 
     objects = UserManager()
 
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["phone_number"]
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['phone_number']
 
     class Meta:
-        db_table = "accounts_user"
+        db_table = 'accounts_user'
         constraints = [
             models.UniqueConstraint(
-                fields=["realm", "email"],
-                name="unique_user_email_per_realm",
+                fields=['realm', 'email'],
+                name='unique_user_email_per_realm',
             ),
             models.UniqueConstraint(
-                fields=["realm", "phone_number"],
-                name="unique_user_phone_per_realm",
+                fields=['realm', 'phone_number'],
+                name='unique_user_phone_per_realm',
             ),
         ]
 
@@ -180,7 +177,7 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
         if not self._state.adding:
             old = User.all_objects.get(pk=self.pk)
             if old.realm_id and self.realm_id and old.realm_id != self.realm_id:
-                raise ValidationError("Cannot change realm.")
+                raise ValidationError('Cannot change realm.')
         super().save(*args, **kwargs)
 
     def set_pin(self, raw_pin: str) -> None:
@@ -203,15 +200,15 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
     @property
     def full_name(self) -> str:
         parts = [self.first_name, self.middle_name, self.last_name]
-        return " ".join(part for part in parts if part).strip() or self.display_name or self.email
+        return ' '.join(part for part in parts if part).strip() or self.display_name or self.email
 
 
 class SystemUserStatus(models.TextChoices):
-    PENDING = "pending", "Pending"
-    INVITED = "invited", "Invited"
-    ACTIVE = "active", "Active"
-    SUSPENDED = "suspended", "Suspended"
-    REMOVED = "removed", "Removed"
+    PENDING = 'pending', 'Pending'
+    INVITED = 'invited', 'Invited'
+    ACTIVE = 'active', 'Active'
+    SUSPENDED = 'suspended', 'Suspended'
+    REMOVED = 'removed', 'Removed'
 
 
 class SystemUser(BaseModel, SoftDeleteModel):
@@ -220,40 +217,40 @@ class SystemUser(BaseModel, SoftDeleteModel):
         null=True,
         blank=True,
         on_delete=models.CASCADE,
-        related_name="system_users",
+        related_name='system_users',
         db_index=True,
     )
     system = models.ForeignKey(
-        "systems.System",
+        'systems.System',
         on_delete=models.CASCADE,
-        related_name="system_users",
+        related_name='system_users',
         db_index=True,
     )
     organization = models.ForeignKey(
-        "organizations.Organization",
+        'organizations.Organization',
         null=True,
         blank=True,
         on_delete=models.CASCADE,
-        related_name="memberships",
+        related_name='memberships',
         db_index=True,
     )
     country = models.ForeignKey(
-        "base.Country",
+        'base.Country',
         null=True,
         blank=True,
         on_delete=models.PROTECT,
-        related_name="system_users",
+        related_name='system_users',
     )
     role = models.ForeignKey(
-        "permissions.Role",
+        'permissions.Role',
         on_delete=models.PROTECT,
-        related_name="org_memberships",
+        related_name='org_memberships',
     )
     all_branches = models.BooleanField(default=True)
     branch_access = models.ManyToManyField(
-        "organizations.Branch",
+        'organizations.Branch',
         blank=True,
-        related_name="memberships",
+        related_name='memberships',
     )
     status = models.CharField(
         max_length=20,
@@ -262,9 +259,9 @@ class SystemUser(BaseModel, SoftDeleteModel):
         db_index=True,
     )
     provisioned_by = models.ForeignKey(
-        "self",
+        'self',
         on_delete=models.SET_NULL,
-        related_name="user_system_provisions",
+        related_name='user_system_provisions',
         null=True,
         blank=True,
     )
@@ -282,16 +279,18 @@ class SystemUser(BaseModel, SoftDeleteModel):
     claimed_at = models.DateTimeField(null=True, blank=True)
 
     external_ref = models.CharField(max_length=120, blank=True, db_index=True)
-    referral_code = models.CharField(max_length=32, null=True, blank=True, unique=True, db_index=True)
+    referral_code = models.CharField(
+        max_length=32, null=True, blank=True, unique=True, db_index=True
+    )
 
     suspended_reason = models.TextField(blank=True)
     suspended_at = models.DateTimeField(null=True, blank=True)
     suspended_by = models.ForeignKey(
-        "self",
+        'self',
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="suspended_system_users",
+        related_name='suspended_system_users',
     )
 
     registered_at = models.DateTimeField(auto_now_add=True)
@@ -299,22 +298,22 @@ class SystemUser(BaseModel, SoftDeleteModel):
     metadata = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        db_table = "accounts_system_user"
+        db_table = 'accounts_system_user'
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "system", "organization"],
+                fields=['user', 'system', 'organization'],
                 condition=models.Q(status=SystemUserStatus.ACTIVE),
-                name="unique_user_per_system_org",
+                name='unique_user_per_system_org',
             )
         ]
         indexes = [
-            models.Index(fields=["system", "country", "organization"]),
-            models.Index(fields=["user", "system", "status"]),
+            models.Index(fields=['system', 'country', 'organization']),
+            models.Index(fields=['user', 'system', 'status']),
         ]
 
     def __str__(self):
         identifier = self.user.email if self.user_id else self.provisioning_email or str(self.id)
-        return f"{identifier} @ {self.system.name}"
+        return f'{identifier} @ {self.system.name}'
 
     @property
     def is_claimable(self):
@@ -328,24 +327,24 @@ class SystemUser(BaseModel, SoftDeleteModel):
     def full_name(self):
         if self.user_id:
             return self.user.full_name
-        return self.provisioning_email or ""
+        return self.provisioning_email or ''
 
 
 class Referral(BaseModel):
     referrer = models.ForeignKey(
         SystemUser,
         on_delete=models.CASCADE,
-        related_name="referrals_made",
+        related_name='referrals_made',
     )
     referred = models.ForeignKey(
         SystemUser,
         on_delete=models.CASCADE,
-        related_name="referred_by",
+        related_name='referred_by',
     )
     system = models.ForeignKey(
-        "systems.System",
+        'systems.System',
         on_delete=models.CASCADE,
-        related_name="referrals",
+        related_name='referrals',
     )
     referral_code = models.CharField(max_length=32, db_index=True)
     is_verified = models.BooleanField(default=False)
@@ -354,24 +353,24 @@ class Referral(BaseModel):
     rewarded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = "accounts_referral"
+        db_table = 'accounts_referral'
         constraints = [
             models.CheckConstraint(
-                condition=~models.Q(referrer=models.F("referred")),
-                name="accounts_referral_no_self_referral",
+                condition=~models.Q(referrer=models.F('referred')),
+                name='accounts_referral_no_self_referral',
             )
         ]
         indexes = [
-            models.Index(fields=["system", "is_verified", "is_rewarded"]),
-            models.Index(fields=["referrer", "is_verified", "is_rewarded"]),
+            models.Index(fields=['system', 'is_verified', 'is_rewarded']),
+            models.Index(fields=['referrer', 'is_verified', 'is_rewarded']),
         ]
 
     def __str__(self):
-        return f"{self.referrer_id} -> {self.referred_id}"
+        return f'{self.referrer_id} -> {self.referred_id}'
 
 
 class SocialAccount(BaseModel, SoftDeleteModel):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="social_accounts")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='social_accounts')
     provider = models.CharField(max_length=50, choices=SocialProvider.choices)
     uid = models.CharField(max_length=255)
     access_token = models.TextField(blank=True)
@@ -380,23 +379,23 @@ class SocialAccount(BaseModel, SoftDeleteModel):
     extra_data = models.JSONField(default=dict)
 
     class Meta:
-        db_table = "accounts_social_account"
+        db_table = 'accounts_social_account'
         constraints = [
-            models.UniqueConstraint(fields=["provider", "uid"], name="unique_social_provider_uid")
+            models.UniqueConstraint(fields=['provider', 'uid'], name='unique_social_provider_uid')
         ]
 
     def __str__(self):
-        return f"{self.provider}:{self.uid} → {self.user.email}"
+        return f'{self.provider}:{self.uid} → {self.user.email}'
 
 
 class VerificationMethod(models.TextChoices):
-    OTP = "otp", "OTP Code"
-    LINK = "link", "Verification Link"
+    OTP = 'otp', 'OTP Code'
+    LINK = 'link', 'Verification Link'
 
 
 class ContactVerificationPurpose(models.TextChoices):
-    REGISTRATION = "registration", "Registration"
-    PROFILE_UPDATE = "profile_update", "Profile Update"
+    REGISTRATION = 'registration', 'Registration'
+    PROFILE_UPDATE = 'profile_update', 'Profile Update'
 
 
 class ContactVerification(BaseModel):
@@ -405,7 +404,7 @@ class ContactVerification(BaseModel):
         null=True,
         blank=True,
         on_delete=models.CASCADE,
-        related_name="contact_verifications",
+        related_name='contact_verifications',
     )
     contact_type = models.CharField(max_length=20, choices=IdentifierType.choices)
     value = models.CharField(max_length=255)
@@ -426,10 +425,10 @@ class ContactVerification(BaseModel):
     ip_verified = models.GenericIPAddressField(null=True, blank=True)
 
     class Meta:
-        db_table = "accounts_contact_verification"
+        db_table = 'accounts_contact_verification'
         indexes = [
-            models.Index(fields=["contact_type", "value_normalized", "created_at"]),
-            models.Index(fields=["is_verified", "consumed_at", "expires_at"]),
+            models.Index(fields=['contact_type', 'value_normalized', 'created_at']),
+            models.Index(fields=['is_verified', 'consumed_at', 'expires_at']),
         ]
 
     def is_expired(self):

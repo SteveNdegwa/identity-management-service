@@ -11,11 +11,31 @@ jobs:
   test:
     runs-on: self-hosted
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: idms
+          POSTGRES_PASSWORD: idms
+          POSTGRES_DB: idms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U idms"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
     env:
       SECRET_KEY: test-secret
       DEBUG: "1"
       ALLOWED_HOSTS: "*"
       DJANGO_SETTINGS_MODULE: spin_identity.settings
+      DATABASE_DB: idms
+      DATABASE_USER: idms
+      DATABASE_PASSWORD: idms
+      DATABASE_HOST: localhost
+      DATABASE_PORT: "5432"
 
     steps:
       - name: Checkout code
