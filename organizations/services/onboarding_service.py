@@ -587,9 +587,10 @@ class OnboardingService:
         if onboarding.status != OnboardingStatus.APPROVED:
             raise OnboardingError('Can only complete an approved application.')
 
-        if onboarding.organization_id and onboarding.created_organization_id:
+        has_created_organization = hasattr(onboarding, 'created_organization')
+        if onboarding.organization_id and has_created_organization:
             return onboarding.organization
-        if onboarding.created_organization_id:
+        if has_created_organization:
             return onboarding.created_organization
 
         if onboarding.organization_id:

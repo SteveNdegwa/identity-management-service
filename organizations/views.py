@@ -213,8 +213,8 @@ def _onboarding_payload(onboarding: OrganizationOnboarding) -> dict:
         'submitted_at': onboarding.submitted_at.isoformat() if onboarding.submitted_at else None,
         'reviewed_at': onboarding.reviewed_at.isoformat() if onboarding.reviewed_at else None,
         'completed_at': onboarding.completed_at.isoformat() if onboarding.completed_at else None,
-        'created_organization_id': str(onboarding.created_organization_id)
-        if onboarding.created_organization_id
+        'created_organization_id': str(onboarding.created_organization.id)
+        if hasattr(onboarding, 'created_organization')
         else None,
         'applicant_notes': onboarding.applicant_notes,
         'internal_notes': onboarding.internal_notes,
