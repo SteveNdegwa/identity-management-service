@@ -202,9 +202,36 @@ initContainer:
       cpu: 50m
       memory: 64Mi
 
+externalSecrets:
+  - name: idms-secrets
+    refreshInterval: 5m
+    secretStoreRefName: vault-backend
+    targetName: idms-secrets
+    dataKey: prod/ke/idms-secrets
+
 env:
   ENV: prod
   DEBUG: "false"
   APP_PATH: /var/www/idms
   ALLOWED_HOSTS: "*"
   SECRET_KEY: "django-secure-prod-replace-me"
+
+secretEnv:
+  DATABASE_PASSWORD:
+    name: idms-secrets
+    key: db-password
+  DATABASE_HOST:
+    name: idms-secrets
+    key: db-host
+  DATABASE_PORT:
+    name: idms-secrets
+    key: db-port
+  DATABASE_DB:
+    name: idms-secrets
+    key: db-name
+  DATABASE_USER:
+    name: idms-secrets
+    key: db-user
+  SECRET_KEY:
+    name: idms-secrets
+    key: secret-key

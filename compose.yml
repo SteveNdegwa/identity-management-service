@@ -11,10 +11,41 @@ services:
       - ALLOWED_HOSTS=*
       - SECRET_KEY=django-insecure-5^@b+7%p-cmdjazo5h1@)ld!d!p4_=czm@0+3jmh(*&!8x7$$g5
       - APP_PATH=/var/www/idms
+      - DATABASE_DB=idms
+      - DATABASE_USER=idms
+      - DATABASE_PASSWORD=idms
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
     volumes:
       - .:/usr/src/app
+      # Mask the host .venv (built for macOS) so the image's Linux .venv wins.
+      - /usr/src/app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - idms_net
+
+  db:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_DB=idms
+      - POSTGRES_USER=idms
+      - POSTGRES_PASSWORD=idms
+    ports:
+      - 5432:5432
+    volumes:
+      - idms_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U idms -d idms']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - idms_net
+
+volumes:
+  idms_pgdata:
 
 networks:
   idms_net:

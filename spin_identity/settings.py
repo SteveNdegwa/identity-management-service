@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,9 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-5^@b+7%p-cmdjazo5h1@)ld!d!p4_=czm@0+3jmh(*&!8x7$g5'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = bool(int(os.environ.get('DEBUG', 0)))  # 1 == True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -57,6 +58,7 @@ MIDDLEWARE = [
     'api.middleware.gateway.GatewayControlMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'spin_identity.healthz.HealthCheckMiddleware',
 ]
 
 ROOT_URLCONF = 'spin_identity.urls'
@@ -85,11 +87,24 @@ WSGI_APPLICATION = 'spin_identity.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DATABASE_DB'),
+        'USER': os.environ.get('DATABASE_USER'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD'),
+        'HOST': os.environ.get('DATABASE_HOST'),
+        'PORT': os.environ.get('DATABASE_PORT'),
+        "OPTIONS": {
+            "application_name": "taswira-api",
+            "connect_timeout": 10,
+            "options": (
+                "-c statement_timeout=300000 "
+                "-c lock_timeout=75000 "
+                "-c idle_in_transaction_session_timeout=60000 "
+                "-c work_mem=32MB"
+            ),  # 5 minute query timeout, 75 second lock timeout, 1 minute idle in transaction timeout, 32MB work memory per query
+        },
+    },
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -125,7 +140,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+APP_PATH = os.environ.get("APP_PATH") or "/var/www/idms"
+STATIC_URL = "/static/"
+STATIC_ROOT = APP_PATH + "/static"
+STATICFILES_DIRS = []
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
