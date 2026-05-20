@@ -182,3 +182,39 @@ AWS_S3_FILE_OVERWRITE = False
 AWS_DEFAULT_ACL = None
 
 AWS_S3_SIGNATURE_VERSION = 's3v4'
+
+# Logging
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        'django': {'level': LOG_LEVEL},
+        'django.request': {'level': 'WARNING'},
+        'accounts': {'level': LOG_LEVEL},
+        'api': {'level': LOG_LEVEL},
+        'audit': {'level': LOG_LEVEL},
+        'base': {'level': LOG_LEVEL},
+        'notifications': {'level': LOG_LEVEL},
+        'organizations': {'level': LOG_LEVEL},
+        'permissions': {'level': LOG_LEVEL},
+        'sso': {'level': LOG_LEVEL},
+        'systems': {'level': LOG_LEVEL},
+    },
+}
