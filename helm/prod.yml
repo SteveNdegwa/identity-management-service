@@ -61,7 +61,7 @@ volumes:
 sidecarimage:
   name: nginx
   repository: nginx
-  tag: stable
+  tag: 1.27-alpine
   pullPolicy: IfNotPresent
   ports:
     - name: http
@@ -175,8 +175,8 @@ autoscaling:
   enabled: false
   minReplicas: 2
   maxReplicas: 6
-  targetCPUUtilizationPercentage: 750
-  targetMemoryUtilizationPercentage: 750
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
 
 pdb:
   enabled: true
@@ -188,7 +188,7 @@ initContainer:
   enabled: true
   name: collectstatic
   image:
-    repository: registry.gitlab.com/spin_mobile/v3-idms
+    repository: registry.gitlab.com/spin_mobile/idms
     tag: latest
   commands: ["python", "manage.py", "collectstatic", "--no-input"]
   volumeMounts:
@@ -213,8 +213,7 @@ env:
   ENV: prod
   DEBUG: "false"
   APP_PATH: /var/www/v3-idms
-  ALLOWED_HOSTS: "*"
-  SECRET_KEY: "django-secure-prod-replace-me"
+  ALLOWED_HOSTS: "idms.spinmobile.co"
 
 secretEnv:
   DATABASE_PASSWORD:

@@ -1,0 +1,116 @@
+name: Reusable deploy
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        type: string
+        required: true
+      namespace:
+        type: string
+        required: true
+      values_file:
+        type: string
+        required: true
+      argo_app:
+        type: string
+        required: true
+    secrets:
+      GITLAB_USER:
+        required: true
+      GITLAB_TOKEN:
+        required: true
+
+jobs:
+  deploy:
+    name: Build and deploy ${{ inputs.env }} idms
+    runs-on: self-hosted
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set image tag
+        id: tag
+        run: echo "image_tag=${{ inputs.env }}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: network=host
+
+      - name: Login to gitlab registry
+        uses: docker/login-action@v4
+        with:
+          registry: registry.gitlab.com
+          username: ${{ secrets.GITLAB_USER }}
+          password: ${{ secrets.GITLAB_TOKEN }}
+
+      - name: Build and push to gitlab registry
+        uses: docker/build-push-action@v7
+        with:
+          push: true
+          tags: |
+            registry.gitlab.com/spin_mobile/idms:${{ steps.tag.outputs.image_tag }}
+            registry.gitlab.com/spin_mobile/idms:${{ inputs.env }}-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: registry.gitlab.com/spin_mobile/idms:${{ steps.tag.outputs.image_tag }}
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
+      - name: Install yq
+        uses: mikefarah/yq@v4.44.3
+
+      - name: Set up helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v4.2.0
+
+      - name: Render helm and update argo repo
+        shell: bash
+        env:
+          TAG: ${{ steps.tag.outputs.image_tag }}
+          GITLAB_USER: ${{ secrets.GITLAB_USER }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          helm repo add spinm https://etowett.github.io/helm-charts
+          [[ -d app ]] && rm -rf app
+          helm fetch spinm/app --version 1.3.1 --untar
+
+          helm template idms ./app \
+            --set image.tag=${TAG} \
+            --set hook.image.tag=${TAG} \
+            --set initContainer.image.tag=${TAG} \
+            --namespace=${{ inputs.namespace }} \
+            -f ${{ inputs.values_file }} \
+            --output-dir ${{ inputs.env }}/${TAG}
+          cd ${{ inputs.env }}/${TAG}
+          cp app/templates/*.yaml .
+          rm -rf app
+          cd ../../
+
+          git clone https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.com/spin_mobile/argo-k8s-releases.git
+          cd argo-k8s-releases
+          git checkout main
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          mkdir -p apps/idms/${{ inputs.env }}/${TAG}
+          cp ../${{ inputs.env }}/${TAG}/* apps/idms/${{ inputs.env }}/${TAG}
+          git add apps/idms/${{ inputs.env }}/${TAG}
+
+          ls -1t apps/idms/${{ inputs.env }} | tail -n +11 | xargs -r -I{} git rm -rf apps/idms/${{ inputs.env }}/{}
+
+          yq -i '.spec.source.path = "apps/idms/${{ inputs.env }}/'"${TAG}"'"' "${{ inputs.argo_app }}"
+          git add ${{ inputs.argo_app }}
+
+          git commit -m "deploy ${{ inputs.env }} idms ${TAG}"
+          git push origin main
