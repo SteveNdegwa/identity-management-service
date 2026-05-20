@@ -34,6 +34,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /usr/src/app
 
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /usr/src/app /usr/src/app
 
 RUN mkdir -p /var/www/idms

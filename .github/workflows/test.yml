@@ -102,6 +102,15 @@ jobs:
       - name: Build Docker image
         run: docker buildx build --load -t idms:test .
 
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: idms:test
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
       - name: Docker image django check
         run: docker run --rm -e SECRET_KEY=test-secret -e DEBUG=1 -e ALLOWED_HOSTS='*' idms:test python manage.py check
 
