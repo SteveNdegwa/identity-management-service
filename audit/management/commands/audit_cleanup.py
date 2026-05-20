@@ -37,10 +37,14 @@ class Command(BaseCommand):
 
         if options['dry_run']:
             self.stdout.write(
-                self.style.WARNING(f'Would delete {count} model audit log entries older than {retention_days} days')
+                self.style.WARNING(
+                    f'Would delete {count} model audit log entries older than {retention_days} days'
+                )
             )
         else:
             deleted_count, _ = old_logs.delete()
             self.stdout.write(
-                self.style.SUCCESS(f'Deleted {deleted_count} model audit log entries older than {retention_days} days')
+                self.style.SUCCESS(
+                    f'Deleted {deleted_count} model audit log entries older than {retention_days} days'
+                )
             )

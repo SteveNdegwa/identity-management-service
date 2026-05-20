@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import random
-from typing import Optional, Any
+from typing import Any
 
 import bcrypt
 
@@ -14,23 +14,20 @@ def hash_value(value: str) -> str:
 
 
 def mask(value: str) -> str:
-    if "@" in value:
-        local, _, domain = value.partition("@")
-        return f"{local[0]}{'*' * max(1, len(local) - 2)}{local[-1]}@{domain}"
+    if '@' in value:
+        local, _, domain = value.partition('@')
+        return f'{local[0]}{"*" * max(1, len(local) - 2)}{local[-1]}@{domain}'
     if len(value) > 4:
-        return value[:2] + "*" * (len(value) - 4) + value[-2:]
-    return "****"
+        return value[:2] + '*' * (len(value) - 4) + value[-2:]
+    return '****'
 
 
 def generate_otp() -> str:
-    return f"{random.SystemRandom().randint(0, 999999):06d}"
+    return f'{random.SystemRandom().randint(0, 999999):06d}'
 
 
 def dummy_bcrypt():
-    bcrypt.checkpw(
-        b"dummy",
-        b"$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    )
+    bcrypt.checkpw(b'dummy', b'$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
 
 
 def get_client_ip(request):
@@ -40,27 +37,28 @@ def get_client_ip(request):
     return request.META.get('REMOTE_ADDR')
 
 
-def sanitize_data(data: Optional[dict]) -> Optional[dict]:
-    sensitive_keys = {"password", "old_password", "new_password"}
+def sanitize_data(data: dict | None) -> dict | None:
+    sensitive_keys = {'password', 'old_password', 'new_password'}
     if data is None:
         return None
+
     def _sanitize(obj: Any) -> Any:
         if isinstance(obj, dict):
             return {
-                k: ("****" if k.lower() in sensitive_keys else _sanitize(v))
-                for k, v in obj.items()
+                k: ('****' if k.lower() in sensitive_keys else _sanitize(v)) for k, v in obj.items()
             }
         elif isinstance(obj, list):
             return [_sanitize(item) for item in obj]
         else:
             return obj
+
     return _sanitize(data)
 
 
 def get_request_data(request) -> dict:
     try:
         if request is None:
-            return {"data": {}, "files": {}}
+            return {'data': {}, 'files': {}}
 
         method = request.method
         content_type = request.META.get('CONTENT_TYPE', '')
@@ -74,8 +72,10 @@ def get_request_data(request) -> dict:
             except json.JSONDecodeError:
                 data = {}
 
-        elif 'multipart/form-data' in content_type or \
-                'application/x-www-form-urlencoded' in content_type:
+        elif (
+            'multipart/form-data' in content_type
+            or 'application/x-www-form-urlencoded' in content_type
+        ):
             data = request.POST.dict()
 
         else:

@@ -1,4 +1,5 @@
 import uuid
+
 from django.db import models
 from django.utils import timezone
 
@@ -21,19 +22,20 @@ class SoftDeleteManager(models.Manager):
 
 class SoftDeleteModel(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
     objects = SoftDeleteManager()
-    all_objects = models.Manager()
-
-    def soft_delete(self):
-        self.deleted_at = timezone.now()
-        self.save(update_fields=["deleted_at"])
-
-    def restore(self):
-        self.deleted_at = None
-        self.save(update_fields=["deleted_at"])
+    all_objects = models.Manager()  # noqa: DJ012
 
     class Meta:
         abstract = True
+
+    def soft_delete(self):
+        self.deleted_at = timezone.now()
+        self.save(update_fields=['deleted_at'])
+
+    def restore(self):
+        self.deleted_at = None
+        self.save(update_fields=['deleted_at'])
 
 
 class Country(BaseModel):
@@ -44,12 +46,12 @@ class Country(BaseModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = "base_country"
-        verbose_name_plural = "countries"
-        ordering = ["name"]
+        db_table = 'base_country'
+        verbose_name_plural = 'countries'
+        ordering = ['name']
 
     def __str__(self):
-        return f"{self.code} – {self.name}"
+        return f'{self.code} – {self.name}'
 
 
 class Realm(BaseModel):
@@ -57,8 +59,8 @@ class Realm(BaseModel):
     description = models.TextField(blank=True)
 
     class Meta:
-        db_table = "base_realm"
-        ordering = ["name"]
+        db_table = 'base_realm'
+        ordering = ['name']
 
     def __str__(self):
         return self.name

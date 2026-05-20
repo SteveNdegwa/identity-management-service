@@ -2,7 +2,6 @@ import hashlib
 import hmac
 import secrets
 from datetime import timedelta
-from typing import Optional
 
 from django.db import transaction
 from django.utils import timezone
@@ -34,7 +33,7 @@ class IdentifierVerificationService:
     @staticmethod
     def _validate_identifier_type(identifier_type: str) -> str:
         if identifier_type not in (IdentifierType.EMAIL, IdentifierType.PHONE):
-            raise IdentifierVerificationError("Only email and phone can be verified.")
+            raise IdentifierVerificationError('Only email and phone can be verified.')
         return identifier_type
 
     @staticmethod
@@ -45,12 +44,12 @@ class IdentifierVerificationService:
 
     @transaction.atomic
     def initiate_registration_verification(
-            self,
-            identifier_type: str,
-            value: str,
-            method: str = VerificationMethod.OTP,
-            ip_address: str = "",
-            system: Optional[System] = None,
+        self,
+        identifier_type: str,
+        value: str,
+        method: str = VerificationMethod.OTP,
+        ip_address: str = '',
+        system: System | None = None,
     ) -> ContactVerification:
         return self._initiate_verification(
             user=None,
@@ -64,12 +63,12 @@ class IdentifierVerificationService:
 
     @transaction.atomic
     def initiate_user_contact_verification(
-            self,
-            user: User,
-            identifier_type: str,
-            method: str = VerificationMethod.OTP,
-            ip_address: str = "",
-            system: Optional[System] = None,
+        self,
+        user: User,
+        identifier_type: str,
+        method: str = VerificationMethod.OTP,
+        ip_address: str = '',
+        system: System | None = None,
     ) -> ContactVerification:
         value = user.email if identifier_type == IdentifierType.EMAIL else user.phone_number
         return self._initiate_verification(
@@ -83,20 +82,20 @@ class IdentifierVerificationService:
         )
 
     def _initiate_verification(
-            self,
-            user: Optional[User],
-            identifier_type: str,
-            value: str,
-            method: str,
-            purpose: str,
-            ip_address: str,
-            system: Optional[System],
+        self,
+        user: User | None,
+        identifier_type: str,
+        value: str,
+        method: str,
+        purpose: str,
+        ip_address: str,
+        system: System | None,
     ) -> ContactVerification:
         identifier_type = self._validate_identifier_type(identifier_type)
         method = self._validate_method(method)
-        value = (value or "").strip()
+        value = (value or '').strip()
         if not value:
-            raise IdentifierVerificationError(f"{identifier_type} value is required.")
+            raise IdentifierVerificationError(f'{identifier_type} value is required.')
 
         normalised = self._normaliser.normalise(value, identifier_type)
         self._rate_limit(identifier_type, normalised, ip_address)
@@ -137,11 +136,11 @@ class IdentifierVerificationService:
 
     @transaction.atomic
     def verify_registration_verification(
-            self,
-            verification_id: str,
-            code: str = "",
-            token: str = "",
-            ip_address: str = "",
+        self,
+        verification_id: str,
+        code: str = '',
+        token: str = '',
+        ip_address: str = '',
     ) -> ContactVerification:
         verification = self._verify_contact_verification(
             verification_id=verification_id,
@@ -153,13 +152,13 @@ class IdentifierVerificationService:
 
     @transaction.atomic
     def verify_user_contact(
-            self,
-            user: User,
-            identifier_type: str,
-            verification_id: str,
-            code: str = "",
-            token: str = "",
-            ip_address: str = "",
+        self,
+        user: User,
+        identifier_type: str,
+        verification_id: str,
+        code: str = '',
+        token: str = '',
+        ip_address: str = '',
     ) -> User:
         verification = self._verify_contact_verification(
             verification_id=verification_id,
@@ -168,46 +167,48 @@ class IdentifierVerificationService:
             ip_address=ip_address,
         )
         if verification.user_id and verification.user_id != user.id:
-            raise IdentifierVerificationError("This verification does not belong to the current user.")
+            raise IdentifierVerificationError(
+                'This verification does not belong to the current user.'
+            )
         if verification.contact_type != identifier_type:
-            raise IdentifierVerificationError("Verification contact type does not match.")
+            raise IdentifierVerificationError('Verification contact type does not match.')
         self._mark_user_contact_verified(user, identifier_type)
         return user
 
     @staticmethod
     def _verify_contact_verification(
-            verification_id: str,
-            code: str,
-            token: str,
-            ip_address: str,
+        verification_id: str,
+        code: str,
+        token: str,
+        ip_address: str,
     ) -> ContactVerification:
         try:
             verification = ContactVerification.objects.get(id=verification_id, is_used=False)
         except ContactVerification.DoesNotExist:
-            raise IdentifierVerificationError("Invalid or expired verification.")
+            raise IdentifierVerificationError('Invalid or expired verification.') from None
 
         if verification.is_expired():
-            raise IdentifierVerificationError("Verification has expired.")
+            raise IdentifierVerificationError('Verification has expired.')
 
         if verification.method == VerificationMethod.OTP:
-            submitted_hash = hashlib.sha256((code or "").encode()).hexdigest()
+            submitted_hash = hashlib.sha256((code or '').encode()).hexdigest()
             expected_hash = verification.code_hash
         else:
-            submitted_hash = hashlib.sha256((token or "").encode()).hexdigest()
+            submitted_hash = hashlib.sha256((token or '').encode()).hexdigest()
             expected_hash = verification.token_hash
 
         if not submitted_hash or not hmac.compare_digest(submitted_hash, expected_hash):
             verification.attempts += 1
             if verification.attempts >= MAX_VERIFY_ATTEMPTS:
                 verification.is_used = True
-            verification.save(update_fields=["attempts", "is_used"])
+            verification.save(update_fields=['attempts', 'is_used'])
             remaining = max(0, MAX_VERIFY_ATTEMPTS - verification.attempts)
             if remaining == 0:
                 raise IdentifierVerificationError(
-                    "Too many incorrect attempts. Please request a new verification."
+                    'Too many incorrect attempts. Please request a new verification.'
                 )
             raise IdentifierVerificationError(
-                f"Incorrect verification. {remaining} attempt(s) remaining."
+                f'Incorrect verification. {remaining} attempt(s) remaining.'
             )
 
         verification.is_used = True
@@ -215,17 +216,17 @@ class IdentifierVerificationService:
         verification.used_at = timezone.now()
         verification.verified_at = timezone.now()
         verification.ip_verified = ip_address or None
-        verification.save(update_fields=[
-            "is_used", "is_verified", "used_at", "verified_at", "ip_verified"
-        ])
+        verification.save(
+            update_fields=['is_used', 'is_verified', 'used_at', 'verified_at', 'ip_verified']
+        )
         return verification
 
     def assert_verified_identifier(
-            self,
-            identifier_type: str,
-            value: str,
-            verification_id: Optional[str],
-    ) -> Optional[ContactVerification]:
+        self,
+        identifier_type: str,
+        value: str,
+        verification_id: str | None,
+    ) -> ContactVerification | None:
         if not verification_id:
             return None
 
@@ -244,7 +245,7 @@ class IdentifierVerificationService:
         except ContactVerification.DoesNotExist:
             raise IdentifierVerificationError(
                 f"No verified {identifier_type} proof was found for '{value}'."
-            )
+            ) from None
         if verification.is_expired():
             raise IdentifierVerificationError(
                 f"The verified {identifier_type} proof for '{value}' has expired."
@@ -254,7 +255,7 @@ class IdentifierVerificationService:
     @staticmethod
     def consume_registration_verification(verification: ContactVerification) -> None:
         verification.consumed_at = timezone.now()
-        verification.save(update_fields=["consumed_at"])
+        verification.save(update_fields=['consumed_at'])
 
     @staticmethod
     def _mark_user_contact_verified(user: User, identifier_type: str) -> None:
@@ -262,11 +263,11 @@ class IdentifierVerificationService:
         if identifier_type == IdentifierType.EMAIL:
             user.email_verified = True
             user.email_verified_at = now
-            user.save(update_fields=["email_verified", "email_verified_at"])
+            user.save(update_fields=['email_verified', 'email_verified_at'])
             return
         user.phone_verified = True
         user.phone_verified_at = now
-        user.save(update_fields=["phone_verified", "phone_verified_at"])
+        user.save(update_fields=['phone_verified', 'phone_verified_at'])
 
     @staticmethod
     def masked_value(value: str) -> str:
@@ -275,19 +276,26 @@ class IdentifierVerificationService:
     @staticmethod
     def _rate_limit(identifier_type: str, normalised: str, ip_address: str) -> None:
         window = timezone.now() - timedelta(minutes=10)
-        if ContactVerification.objects.filter(
-            contact_type=identifier_type,
-            value_normalized=normalised,
-            created_at__gte=window,
-        ).count() >= 5:
+        if (
+            ContactVerification.objects.filter(
+                contact_type=identifier_type,
+                value_normalized=normalised,
+                created_at__gte=window,
+            ).count()
+            >= 5
+        ):
             raise IdentifierVerificationError(
-                "Too many verifications requested. Please wait a few minutes."
+                'Too many verifications requested. Please wait a few minutes.'
             )
 
-        if ip_address and ContactVerification.objects.filter(
-            ip_requested=ip_address,
-            created_at__gte=timezone.now() - timedelta(hours=1),
-        ).count() >= 10:
+        if (
+            ip_address
+            and ContactVerification.objects.filter(
+                ip_requested=ip_address,
+                created_at__gte=timezone.now() - timedelta(hours=1),
+            ).count()
+            >= 10
+        ):
             raise IdentifierVerificationError(
-                "Too many requests from this device. Please try again later."
+                'Too many requests from this device. Please try again later.'
             )

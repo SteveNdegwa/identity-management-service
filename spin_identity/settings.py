@@ -10,8 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-5^@b+7%p-cmdjazo5h1@)ld!d!p4_=czm@0+3jmh(*&!8x7$g5'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = bool(int(os.environ.get('DEBUG', 0)))  # 1 == True
+DEBUG = os.environ.get('DEBUG', '0').lower() in ('1', 'true', 'yes', 'on')
 
 ALLOWED_HOSTS = ['*']
 
@@ -93,14 +93,14 @@ DATABASES = {
         'PASSWORD': os.environ.get('DATABASE_PASSWORD'),
         'HOST': os.environ.get('DATABASE_HOST'),
         'PORT': os.environ.get('DATABASE_PORT'),
-        "OPTIONS": {
-            "application_name": "taswira-api",
-            "connect_timeout": 10,
-            "options": (
-                "-c statement_timeout=300000 "
-                "-c lock_timeout=75000 "
-                "-c idle_in_transaction_session_timeout=60000 "
-                "-c work_mem=32MB"
+        'OPTIONS': {
+            'application_name': 'taswira-api',
+            'connect_timeout': 10,
+            'options': (
+                '-c statement_timeout=300000 '
+                '-c lock_timeout=75000 '
+                '-c idle_in_transaction_session_timeout=60000 '
+                '-c work_mem=32MB'
             ),  # 5 minute query timeout, 75 second lock timeout, 1 minute idle in transaction timeout, 32MB work memory per query
         },
     },
@@ -140,9 +140,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-APP_PATH = os.environ.get("APP_PATH") or "/var/www/idms"
-STATIC_URL = "/static/"
-STATIC_ROOT = APP_PATH + "/static"
+APP_PATH = os.environ.get('APP_PATH') or '/var/www/idms'
+STATIC_URL = '/static/'
+STATIC_ROOT = APP_PATH + '/static'
 STATICFILES_DIRS = []
 
 # Default primary key field type
@@ -156,24 +156,24 @@ AUTHENTICATION_BACKENDS = [
 SILENCED_SYSTEM_CHECKS = ['auth.W004']
 
 STORAGES = {
-    "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    'default': {
+        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
     },
-    "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
     },
 }
 
 
-AWS_ACCESS_KEY_ID = ""
-AWS_SECRET_ACCESS_KEY = ""
-AWS_STORAGE_BUCKET_NAME = ""
+AWS_ACCESS_KEY_ID = ''
+AWS_SECRET_ACCESS_KEY = ''
+AWS_STORAGE_BUCKET_NAME = ''
 
-AWS_S3_ENDPOINT_URL = ""
-AWS_S3_REGION_NAME = ""
+AWS_S3_ENDPOINT_URL = ''
+AWS_S3_REGION_NAME = ''
 
 AWS_QUERYSTRING_AUTH = False
 AWS_S3_FILE_OVERWRITE = False
 AWS_DEFAULT_ACL = None
 
-AWS_S3_SIGNATURE_VERSION = "s3v4"
+AWS_S3_SIGNATURE_VERSION = 's3v4'
