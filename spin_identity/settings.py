@@ -184,7 +184,9 @@ AWS_DEFAULT_ACL = None
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 
 # Logging
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+_VALID_LOG_LEVELS = {'CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'NOTSET'}
+_LOG_LEVEL_RAW = os.environ.get('LOG_LEVEL', 'INFO').upper()
+LOG_LEVEL = _LOG_LEVEL_RAW if _LOG_LEVEL_RAW in _VALID_LOG_LEVELS else 'INFO'
 
 LOGGING = {
     'version': 1,
@@ -197,6 +199,7 @@ LOGGING = {
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',
             'formatter': 'standard',
         },
     },
