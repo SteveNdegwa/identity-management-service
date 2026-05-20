@@ -8,7 +8,7 @@ class HealthCheckMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path == '/healthz':
+        if request.path.rstrip('/') == '/healthz':
             return JsonResponse(
                 {
                     'success': True,

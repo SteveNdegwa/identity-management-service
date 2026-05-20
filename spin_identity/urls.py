@@ -16,16 +16,9 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.http import JsonResponse
 from django.urls import include, path
 
-
-def healthz(_request):
-    return JsonResponse({'success': True, 'message': 'healthy'})
-
-
 urlpatterns = [
-    path('healthz', healthz, name='healthz'),
     path('cia/', admin.site.urls),
     path('api/', include('api.urls')),
 ]

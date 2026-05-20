@@ -46,7 +46,7 @@ readinessProbe:
 
 volumeMounts:
   - name: staticfiles
-    mountPath: /var/www/v3-idms
+    mountPath: /var/www/idms
   - name: nginx-conf
     mountPath: /etc/nginx/conf.d
     readOnly: true
@@ -61,7 +61,7 @@ volumes:
 sidecarimage:
   name: nginx
   repository: nginx
-  tag: 1.27-alpine
+  tag: 1.31-alpine
   pullPolicy: IfNotPresent
   ports:
     - name: http
@@ -72,7 +72,7 @@ sidecarimage:
       mountPath: /etc/nginx/conf.d
       readOnly: true
     - name: staticfiles
-      mountPath: /var/www/v3-idms
+      mountPath: /var/www/idms
   livenessProbe:
     path: /nghealthz
     port: 80
@@ -113,7 +113,7 @@ configMaps:
         }
         server {
             listen 80;
-            root /var/www/v3-idms;
+            root /var/www/idms;
             client_max_body_size 100M;
 
             access_log stdout;
@@ -193,7 +193,7 @@ initContainer:
   commands: ["python", "manage.py", "collectstatic", "--no-input"]
   volumeMounts:
     - name: staticfiles
-      mountPath: /var/www/v3-idms
+      mountPath: /var/www/idms
   resources:
     limits:
       cpu: 500m
@@ -212,7 +212,7 @@ externalSecrets:
 env:
   ENV: prod
   DEBUG: "false"
-  APP_PATH: /var/www/v3-idms
+  APP_PATH: /var/www/idms
   ALLOWED_HOSTS: "idms.spinmobile.co"
 
 secretEnv:
