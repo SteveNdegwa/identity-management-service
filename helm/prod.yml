@@ -32,7 +32,7 @@ livenessProbe:
   timeoutSeconds: 60
   httpHeaders:
     - name: Host
-      value: idms.spinmobile.co
+      value: identity.spinmobile.co
 
 readinessProbe:
   path: /healthz
@@ -42,7 +42,7 @@ readinessProbe:
   timeoutSeconds: 60
   httpHeaders:
     - name: Host
-      value: idms.spinmobile.co
+      value: identity.spinmobile.co
 
 volumeMounts:
   - name: staticfiles
@@ -154,14 +154,14 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod-issuer
   hosts:
-    - host: idms.spinmobile.co
+    - host: identity.spinmobile.co
       paths:
         - path: /
           pathType: ImplementationSpecific
   tls:
     - secretName: v3-idms-tls
       hosts:
-        - idms.spinmobile.co
+        - identity.spinmobile.co
 
 resources:
   limits:
@@ -213,7 +213,7 @@ env:
   ENV: prod
   DEBUG: "false"
   APP_PATH: /var/www/idms
-  ALLOWED_HOSTS: "idms.spinmobile.co"
+  ALLOWED_HOSTS: "identity.spinmobile.co"
 
 secretEnv:
   DATABASE_PASSWORD:

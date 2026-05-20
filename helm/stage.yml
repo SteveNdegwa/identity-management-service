@@ -32,7 +32,7 @@ livenessProbe:
   timeoutSeconds: 60
   httpHeaders:
     - name: Host
-      value: stage-idms.spinmobile.co
+      value: stage-identity.spinmobile.co
 
 readinessProbe:
   path: /healthz
@@ -42,7 +42,7 @@ readinessProbe:
   timeoutSeconds: 60
   httpHeaders:
     - name: Host
-      value: stage-idms.spinmobile.co
+      value: stage-identity.spinmobile.co
 
 volumeMounts:
   - name: staticfiles
@@ -155,14 +155,14 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod-issuer
   hosts:
-    - host: stage-idms.spinmobile.co
+    - host: stage-identity.spinmobile.co
       paths:
         - path: /
           pathType: ImplementationSpecific
   tls:
     - secretName: stage-v3-idms-tls
       hosts:
-        - stage-idms.spinmobile.co
+        - stage-identity.spinmobile.co
 
 resources:
   limits:
