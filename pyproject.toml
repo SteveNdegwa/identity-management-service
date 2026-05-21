@@ -1,0 +1,52 @@
+[project]
+name = "idms"
+version = "0.1.0"
+authors = [
+    { name = "Eutychus Towett", email = "ektowett@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "django>=5.1,<6.0",
+    "django-storages[boto3]>=1.14.4",
+    "gunicorn>=23.0.0",
+    "bcrypt>=4.2.0",
+    "pyjwt>=2.9.0",
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.11",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+extend-exclude = [
+    "**/migrations/*",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "DJ",   # flake8-django
+    "SIM",  # flake8-simplify
+    "C4",   # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line-too-long (the formatter handles this)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/settings.py" = ["F403", "F405"]
+"**/tests.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"

@@ -1,0 +1,236 @@
+replicaCount: 1
+
+image:
+  repository: registry.gitlab.com/spin_mobile/idms
+  pullPolicy: IfNotPresent
+  tag: latest
+
+imagePullSecrets:
+  - name: gitlab-registry-credentials
+
+commands: ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout", "300", "spin_identity.wsgi:application", "-w", "4"]
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+livenessProbe:
+  path: /healthz
+  port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 60
+  timeoutSeconds: 60
+  httpHeaders:
+    - name: Host
+      value: identity.spinmobile.co
+
+readinessProbe:
+  path: /healthz
+  port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 60
+  timeoutSeconds: 60
+  httpHeaders:
+    - name: Host
+      value: identity.spinmobile.co
+
+volumeMounts:
+  - name: staticfiles
+    mountPath: /var/www/idms
+  - name: nginx-conf
+    mountPath: /etc/nginx/conf.d
+    readOnly: true
+
+volumes:
+  - name: nginx-conf
+    configMap:
+      name: v3-idms-nginx-config
+  - name: staticfiles
+    emptyDir: {}
+
+sidecarimage:
+  name: nginx
+  repository: nginx
+  tag: 1.31-alpine
+  pullPolicy: IfNotPresent
+  ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+  mounts:
+    - name: nginx-conf
+      mountPath: /etc/nginx/conf.d
+      readOnly: true
+    - name: staticfiles
+      mountPath: /var/www/idms
+  livenessProbe:
+    path: /nghealthz
+    port: 80
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 60
+  readinessProbe:
+    path: /nghealthz
+    port: 80
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 60
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+port:
+  port: 8000
+  name: gunicorn
+  protocol: TCP
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: http
+
+configMaps:
+  - name: v3-idms-nginx-config
+    data:
+      backend.conf: |-
+        upstream app_server {
+            # All containers in the same pod are reachable with 127.0.0.1
+            server 127.0.0.1:8000 fail_timeout=0;
+        }
+        server {
+            listen 80;
+            root /var/www/idms;
+            client_max_body_size 100M;
+
+            access_log stdout;
+            error_log  stderr;
+
+            location / {
+                location /static {
+                    add_header Access-Control-Allow-Origin *;
+                    add_header Access-Control-Max-Age 3600;
+                    add_header Access-Control-Expose-Headers Content-Length;
+                    add_header Access-Control-Allow-Headers Range;
+                    if ($request_method = OPTIONS) {
+                        return 204;
+                    }
+                    try_files /$uri @django;
+                }
+                location /nghealthz {
+                    default_type application/json;
+                    return 200 '{"success": true, "message": "healthy"}';
+                }
+                try_files $uri @django;
+            }
+            location @django {
+                proxy_connect_timeout 300;
+                proxy_send_timeout 300;
+                proxy_read_timeout 300;
+                send_timeout 300;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header Host $http_host;
+                proxy_redirect off;
+                proxy_pass http://app_server;
+            }
+        }
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod-issuer
+  hosts:
+    - host: identity.spinmobile.co
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: v3-idms-tls
+      hosts:
+        - identity.spinmobile.co
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 200m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+tolerations: []
+
+initContainer:
+  enabled: true
+  name: collectstatic
+  image:
+    repository: registry.gitlab.com/spin_mobile/idms
+    tag: latest
+  commands: ["python", "manage.py", "collectstatic", "--no-input"]
+  volumeMounts:
+    - name: staticfiles
+      mountPath: /var/www/idms
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+externalSecrets:
+  - name: v3-idms-secrets
+    refreshInterval: 5m
+    secretStoreRefName: vault-backend
+    targetName: v3-idms-secrets
+    dataKey: prod/ke/v3-idms-secrets
+
+env:
+  ENV: prod
+  DEBUG: "false"
+  APP_PATH: /var/www/idms
+  ALLOWED_HOSTS: "identity.spinmobile.co"
+
+secretEnv:
+  DATABASE_PASSWORD:
+    name: v3-idms-secrets
+    key: db-password
+  DATABASE_HOST:
+    name: v3-idms-secrets
+    key: db-host
+  DATABASE_PORT:
+    name: v3-idms-secrets
+    key: db-port
+  DATABASE_DB:
+    name: v3-idms-secrets
+    key: db-name
+  DATABASE_USER:
+    name: v3-idms-secrets
+    key: db-user
+  SECRET_KEY:
+    name: v3-idms-secrets
+    key: secret-key

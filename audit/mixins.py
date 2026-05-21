@@ -4,7 +4,6 @@ from audit.services.request_context import RequestContext
 
 
 class AuditableMixin:
-
     def _is_tracking_enabled(self, action: str) -> bool:
         from audit.models import ModelAuditConfiguration, ModelAuditEventType
 
@@ -27,7 +26,7 @@ class AuditableMixin:
         return False
 
     def save(self, *args, **kwargs):
-        from audit.models import ModelAuditEventType, ModelAuditSeverity, ModelAuditLog
+        from audit.models import ModelAuditEventType, ModelAuditLog, ModelAuditSeverity
 
         is_new = self.pk is None
 
@@ -79,7 +78,7 @@ class AuditableMixin:
         return result
 
     def delete(self, *args, **kwargs):
-        from audit.models import ModelAuditEventType, ModelAuditSeverity, ModelAuditLog
+        from audit.models import ModelAuditEventType, ModelAuditLog, ModelAuditSeverity
 
         if not self._is_tracking_enabled(ModelAuditEventType.DELETE):
             return super().delete(*args, **kwargs)

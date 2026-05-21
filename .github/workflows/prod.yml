@@ -1,0 +1,24 @@
+name: Deploy prod idms app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  # shared with stage so prod and stage deploys serialize against the same argo repo
+  group: argo-k8s-releases
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+  deploy:
+    needs: test
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      env: prod
+      namespace: prod-ke
+      values_file: helm/prod.yml
+      argo_app: argo-apps/prod-ke-idms.yml
+    secrets: inherit

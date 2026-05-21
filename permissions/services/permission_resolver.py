@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Optional
 
 from django.db import models
 from django.utils import timezone
@@ -13,16 +12,15 @@ class ResolvedContext:
     system_user_id: str
     organization_id: str
     country_code: str
-    role: Optional[str]
-    role_id: Optional[str]
+    role: str | None
+    role_id: str | None
     permissions: set[str] = field(default_factory=set)
-    accessible_branch_ids: Optional[list] = None
-    status: str = ""
-    resolved_at: str = ""
+    accessible_branch_ids: list | None = None
+    status: str = ''
+    resolved_at: str = ''
 
 
 class PermissionResolverService:
-
     def __init__(self, cache=None):
         self._cache = cache
 
@@ -63,9 +61,9 @@ class PermissionResolverService:
 
         # Resolve codenames
         permissions = set(
-            Permission.objects.filter(
-                id__in=perm_ids, is_active=True
-            ).values_list("codename", flat=True)
+            Permission.objects.filter(id__in=perm_ids, is_active=True).values_list(
+                'codename', flat=True
+            )
         )
 
         # Apply overrides
@@ -77,8 +75,7 @@ class PermissionResolverService:
             ctx.accessible_branch_ids = None
         else:
             ctx.accessible_branch_ids = [
-                str(bg.branch_id)
-                for bg in system_user.branch_access.all()
+                str(bg.branch_id) for bg in system_user.branch_access.all()
             ]
 
         return ctx
@@ -86,21 +83,23 @@ class PermissionResolverService:
     @staticmethod
     def _apply_overrides(permissions: set[str], system_user: SystemUser) -> set[str]:
         now = timezone.now()
-        overrides = UserPermissionOverride.objects.filter(
-            system_user=system_user,
-            is_active=True,
-        ).filter(
-            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
-        ).select_related("permission")
+        overrides = (
+            UserPermissionOverride.objects.filter(
+                system_user=system_user,
+                is_active=True,
+            )
+            .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now))
+            .select_related('permission')
+        )
 
         for override in overrides:
             codename = override.permission.codename
-            if override.effect == "grant":
+            if override.effect == 'grant':
                 permissions.add(codename)
-            elif override.effect == "deny":
+            elif override.effect == 'deny':
                 permissions.discard(codename)
         return permissions
 
     @staticmethod
     def _key(system_user_id: str) -> str:
-        return f"perm:{system_user_id}"
+        return f'perm:{system_user_id}'

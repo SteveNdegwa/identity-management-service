@@ -1,0 +1,118 @@
+name: IDMS Service CI
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test:
+    runs-on: self-hosted
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: idms
+          POSTGRES_PASSWORD: idms
+          POSTGRES_DB: idms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U idms"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      SECRET_KEY: test-secret
+      DEBUG: "1"
+      ALLOWED_HOSTS: "*"
+      DJANGO_SETTINGS_MODULE: spin_identity.settings
+      DATABASE_DB: idms
+      DATABASE_USER: idms
+      DATABASE_PASSWORD: idms
+      DATABASE_HOST: localhost
+      DATABASE_PORT: "5432"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Ensure C toolchain available
+        # bcrypt 4.x ships a Rust extension; if no cp314 wheel is published
+        # uv has to build from source and needs cc to link.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run Ruff linting
+        run: uv run ruff check --output-format=github .
+
+      - name: Run Ruff formatting check
+        run: uv run ruff format --check .
+
+      - name: Check Python syntax
+        run: |
+          uv run python -m py_compile manage.py
+          find . -name "*.py" -not -path "./.venv/*" -not -path "./venv/*" | xargs uv run python -m py_compile
+
+      - name: Django system checks
+        run: |
+          uv run python manage.py check
+          uv run python manage.py check --tag security
+          uv run python manage.py check --tag compatibility
+
+      - name: Test WSGI application loading
+        run: uv run python -c "from spin_identity.wsgi import application; print('WSGI application loaded successfully')"
+
+      - name: Test ASGI application loading
+        run: uv run python -c "from spin_identity.asgi import application; print('ASGI application loaded successfully')"
+
+      - name: Test static files collection
+        run: uv run python manage.py collectstatic --noinput --dry-run
+
+      - name: Test /healthz endpoint
+        run: |
+          uv run python manage.py runserver 0.0.0.0:8000 &
+          SERVER_PID=$!
+          sleep 5
+          curl -f http://localhost:8000/healthz || (kill $SERVER_PID; exit 1)
+          kill $SERVER_PID
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        run: docker buildx build --load -t idms:test .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: idms:test
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
+      - name: Docker image django check
+        run: docker run --rm -e SECRET_KEY=test-secret -e DEBUG=1 -e ALLOWED_HOSTS='*' idms:test python manage.py check
+
+      - name: Run Django tests
+        run: uv run python manage.py test --verbosity=2

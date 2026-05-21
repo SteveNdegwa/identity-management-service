@@ -7,7 +7,7 @@ from base.models import BaseModel
 
 class RateLimitRule(BaseModel):
     SCOPE_CHOICES = [
-        ('global','Global'),
+        ('global', 'Global'),
         ('user_id', 'Per User ID'),
         ('system_user_id', 'Per System User ID'),
         ('ip', 'Per IP'),
@@ -31,31 +31,22 @@ class RateLimitRule(BaseModel):
     limit = models.PositiveIntegerField(help_text='Number of requests allowed')
     period = models.CharField(max_length=10, choices=PERIOD_CHOICES)
     period_count = models.PositiveIntegerField(
-        default=1,
-        help_text="Number of periods (e.g., 2 for '2 hours')"
+        default=1, help_text="Number of periods (e.g., 2 for '2 hours')"
     )
     endpoint_pattern = models.CharField(
-        max_length=200,
-        blank=True,
-        help_text='Regex pattern for URL matching'
+        max_length=200, blank=True, help_text='Regex pattern for URL matching'
     )
     http_methods = models.CharField(
-        max_length=50,
-        blank=True,
-        help_text='Comma-separated HTTP methods (GET,POST,etc)'
+        max_length=50, blank=True, help_text='Comma-separated HTTP methods (GET,POST,etc)'
     )
     is_active = models.BooleanField(default=True)
-    priority = models.IntegerField(
-        default=0,
-        help_text='Higher priority rules are checked first'
-    )
+    priority = models.IntegerField(default=0, help_text='Higher priority rules are checked first')
     block_duration_minutes = models.PositiveIntegerField(
-        default=0,
-        help_text='Block duration after limit exceeded (0 = no blocking)'
+        default=0, help_text='Block duration after limit exceeded (0 = no blocking)'
     )
 
     class Meta:
-        db_table = "api_ratelimit_rule"
+        db_table = 'api_ratelimit_rule'
 
     def __str__(self) -> str:
         return f'{self.name}: {self.limit}/{self.period_count} {self.period}(s) - {self.scope}'
@@ -82,7 +73,7 @@ class RateLimitAttempt(BaseModel):
     last_attempt = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "api_ratelimit_attempt"
+        db_table = 'api_ratelimit_attempt'
         unique_together = ['rule', 'key', 'endpoint', 'window_start']
         indexes = [
             models.Index(fields=['rule', 'key', 'window_start']),
@@ -99,7 +90,7 @@ class RateLimitBlock(BaseModel):
     blocked_until = models.DateTimeField(db_index=True)
 
     class Meta:
-        db_table = "api_ratelimit_block"
+        db_table = 'api_ratelimit_block'
 
     def __str__(self) -> str:
         return f'Block: {self.key} until {self.blocked_until} by {self.rule.name}'
