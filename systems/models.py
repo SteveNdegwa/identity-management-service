@@ -12,13 +12,13 @@ class System(BaseModel):
     realm = models.ForeignKey(
         Realm,
         on_delete=models.PROTECT,
-        related_name='systems',
-        help_text='Realm determines SSO boundary and identifier uniqueness',
+        related_name="systems",
+        help_text="Realm determines SSO boundary and identifier uniqueness"
     )
 
     class PasswordType(models.TextChoices):
-        PASSWORD = 'password', 'Password'
-        PIN = 'pin', 'PIN'
+        PASSWORD = "password", "Password"
+        PIN = "pin", "PIN"
 
     name = models.CharField(max_length=120, unique=True)
     slug = models.SlugField(max_length=80, unique=True)
@@ -27,12 +27,14 @@ class System(BaseModel):
     website = models.URLField(blank=True)
 
     available_countries = models.ManyToManyField(
-        'base.Country',
-        related_name='available_systems',
+        "base.Country",
+        related_name="available_systems",
     )
 
     password_type = models.CharField(
-        max_length=10, choices=PasswordType.choices, default=PasswordType.PASSWORD
+        max_length=10,
+        choices=PasswordType.choices,
+        default=PasswordType.PASSWORD
     )
     allow_password_login = models.BooleanField(default=True)
     allow_passwordless_login = models.BooleanField(default=False)
@@ -48,7 +50,7 @@ class System(BaseModel):
     referral_reward_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=Decimal('0.00'),
+        default=Decimal("0.00"),
     )
     auto_verify_referrals = models.BooleanField(default=False)
 
@@ -56,32 +58,43 @@ class System(BaseModel):
     mfa_required_enforced = models.BooleanField(default=False)
     allowed_mfa_methods = models.JSONField(
         default=list,
-        help_text='Empty = all MFA methods permitted. Non-empty = restrict to listed methods.',
+        blank=True,
+        null=True,
+        help_text="Empty = all MFA methods permitted. Non-empty = restrict to listed methods.",
     )
 
     refresh_token_timeout_minutes = models.PositiveIntegerField(
         null=True,
         blank=True,
         help_text=(
-            'If set, users must re-login for this system once their '
-            'refresh token has been unused for this many minutes — '
-            'even with an active SSO session.  NULL = silent reauth.'
-        ),
+            "If set, users must re-login for this system once their "
+            "refresh token has been unused for this many minutes — "
+            "even with an active SSO session.  NULL = silent reauth."
+        )
     )
     mfa_reauth_window_minutes = models.PositiveIntegerField(
         null=True,
         blank=True,
         help_text=(
-            'MFA must be re-verified for this system if no token '
-            'refresh has occurred within this window.  0 = disabled.'
-        ),
+            "MFA must be re-verified for this system if no token "
+            "refresh has occurred within this window.  0 = disabled."
+        )
+    )
+
+    default_role = models.ForeignKey(
+        "permissions.Role",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Default role for systems that allow self registration.",
+        related_name="default_role"
     )
 
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'systems_system'
-        ordering = ['name']
+        db_table = "systems_system"
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -90,13 +103,17 @@ class System(BaseModel):
         if not self._state.adding:
             old = System.objects.get(pk=self.pk)
             if old.realm_id != self.realm_id:
-                raise ValidationError('System realm cannot be changed after creation.')
-        self.allowed_social_providers = normalize_social_provider_list(
-            self.allowed_social_providers
-        )
+                raise ValidationError(
+                    "System realm cannot be changed after creation."
+                )
+        if self.registration_open and not self.default_role:
+            raise ValidationError(
+                "Referrals can only be enabled for systems that allow self-registration."
+            )
+        self.allowed_social_providers = normalize_social_provider_list(self.allowed_social_providers)
         if self.allows_referrals and not self.registration_open:
             raise ValidationError(
-                'Referrals can only be enabled for systems that allow self-registration.'
+                "Referrals can only be enabled for systems that allow self-registration."
             )
         super().save(*args, **kwargs)
 
@@ -108,24 +125,27 @@ class System(BaseModel):
         return self.allowed_mfa_methods or []
 
     def is_login_flow_allowed(self, flow: str) -> bool:
-        if flow == 'password':
+        if flow == "password":
             return self.allow_password_login and not self.passwordless_only
-        if flow == 'passwordless':
+        if flow == "passwordless":
             return self.allow_passwordless_login
-        if flow == 'magic_link':
+        if flow == "magic_link":
             return self.allow_magic_link_login
-        if flow == 'social':
+        if flow == "social":
             return self.allow_social_login
         return False
 
-
 class SystemClient(BaseModel):
     class ClientType(models.TextChoices):
-        CONFIDENTIAL = 'confidential', 'Confidential (server-side)'
-        PUBLIC = 'public', 'Public (SPA / mobile)'
-        M2M = 'm2m', 'Machine-to-Machine'
+        CONFIDENTIAL = "confidential", "Confidential (server-side)"
+        PUBLIC = "public", "Public (SPA / mobile)"
+        M2M = "m2m", "Machine-to-Machine"
 
-    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name='clients')
+    system = models.ForeignKey(
+        System,
+        on_delete=models.CASCADE,
+        related_name="clients"
+    )
     name = models.CharField(max_length=120)
     client_id = models.CharField(max_length=80, unique=True, default=secrets.token_urlsafe)
     client_secret_hash = models.CharField(max_length=255, blank=True)
@@ -134,9 +154,9 @@ class SystemClient(BaseModel):
         choices=ClientType.choices,
         default=ClientType.CONFIDENTIAL,
     )
-    redirect_uris = models.JSONField(default=list)
-    logout_uris = models.JSONField(default=list)
-    allowed_scopes = models.JSONField(default=list)
+    redirect_uris = models.JSONField(default=list, null=True, blank=True)
+    logout_uris = models.JSONField(default=list, null=True, blank=True)
+    allowed_scopes = models.JSONField(default=list, null=True, blank=True)
     access_token_ttl = models.PositiveIntegerField(default=0)
     refresh_token_ttl = models.PositiveIntegerField(default=0)
     id_token_ttl = models.PositiveIntegerField(default=0)
@@ -149,11 +169,11 @@ class SystemClient(BaseModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'systems_client'
-        unique_together = [('system', 'name')]
+        db_table = "systems_client"
+        unique_together = [("system", "name")]
 
     def __str__(self):
-        return f'{self.system.name}/{self.name} ({self.client_id[:10]}…)'
+        return f"{self.system.name}/{self.name} ({self.client_id[:10]}…)"
 
     def save(self, *args, **kwargs):
         if self.override_allowed_social_providers is not None:
@@ -169,40 +189,42 @@ class SystemClient(BaseModel):
             return client_val if client_val is not None else system_val
 
         return {
-            'allow_password_login': (system.allow_password_login and not system.passwordless_only),
-            'allow_passwordless_login': resolve(
+            "allow_password_login": (
+                    system.allow_password_login and not system.passwordless_only
+            ),
+            "allow_passwordless_login": resolve(
                 self.override_allow_passwordless_login,
                 system.allow_passwordless_login,
             ),
-            'allow_magic_link_login': resolve(
+            "allow_magic_link_login": resolve(
                 self.override_allow_magic_link_login,
                 system.allow_magic_link_login,
             ),
-            'allow_social_login': resolve(
+            "allow_social_login": resolve(
                 self.override_allow_social_login,
                 system.allow_social_login,
             ),
-            'allowed_social_providers': resolve(
+            "allowed_social_providers": resolve(
                 self.override_allowed_social_providers,
                 system.allowed_social_providers,
             ),
-            'passwordless_only': system.passwordless_only,
-            'registration_open': system.registration_open,
-            'auto_login_after_registration': system.auto_login_after_registration,
-            'requires_approval': system.requires_approval,
-            'mfa_required': system.mfa_required,
-            'allowed_mfa_methods': system.allowed_mfa_methods,
+            "passwordless_only": system.passwordless_only,
+            "registration_open": system.registration_open,
+            "auto_login_after_registration": system.auto_login_after_registration,
+            "requires_approval": system.requires_approval,
+            "mfa_required": system.mfa_required,
+            "allowed_mfa_methods": system.allowed_mfa_methods,
         }
 
 
 class SystemSettings(BaseModel):
     class ValueType(models.TextChoices):
-        STRING = 'string', 'String'
-        INTEGER = 'integer', 'Integer'
-        BOOLEAN = 'boolean', 'Boolean'
-        JSON = 'json', 'JSON'
+        STRING = "string", "String"
+        INTEGER = "integer", "Integer"
+        BOOLEAN = "boolean", "Boolean"
+        JSON = "json", "JSON"
 
-    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name='settings')
+    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name="settings")
     key = models.CharField(max_length=120)
     value = models.TextField()
     value_type = models.CharField(
@@ -214,18 +236,17 @@ class SystemSettings(BaseModel):
     is_secret = models.BooleanField(default=False)
 
     class Meta:
-        db_table = 'systems_settings'
-        unique_together = [('system', 'key')]
-        verbose_name_plural = 'System settings'
+        db_table = "systems_settings"
+        unique_together = [("system", "key")]
+        verbose_name_plural = "System settings"
 
     def __str__(self):
-        return f'{self.system.name}.{self.key}'
+        return f"{self.system.name}.{self.key}"
 
     def typed_value(self):
         import json
-
         if self.value_type == self.ValueType.BOOLEAN:
-            return self.value.lower() in ('true', '1', 'yes')
+            return self.value.lower() in ("true", "1", "yes")
         if self.value_type == self.ValueType.INTEGER:
             return int(self.value)
         if self.value_type == self.ValueType.JSON:
@@ -234,7 +255,7 @@ class SystemSettings(BaseModel):
 
 
 class SystemWebhook(BaseModel):
-    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name='webhooks')
+    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name="webhooks")
     name = models.CharField(max_length=80)
     endpoint_url = models.URLField()
     secret_encrypted = models.TextField()
@@ -245,7 +266,7 @@ class SystemWebhook(BaseModel):
     consecutive_failures = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
-        db_table = 'systems_webhook'
+        db_table = "systems_webhook"
 
     def __str__(self):
-        return f'{self.system.name} → {self.endpoint_url}'
+        return f"{self.system.name} → {self.endpoint_url}"
