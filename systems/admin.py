@@ -1,8 +1,11 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django import forms
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 from django.utils.html import format_html
 
 from .models import System, SystemClient, SystemSettings, SystemWebhook
+from .services.system_admin_service import SystemAdminService, SystemAdminServiceError
 from utils.social_providers import SocialProvider
 
 
@@ -117,6 +120,7 @@ class SystemAdmin(admin.ModelAdmin):
                 "logo_url",
                 "website",
                 "available_countries",
+                "default_role",
                 "is_active",
             )
         }),
@@ -172,15 +176,22 @@ class SystemAdmin(admin.ModelAdmin):
         )
 
     def is_active_colored(self, obj):
-        if obj.is_active:
-            return format_html('<span style="color:green;font-weight:600">Active</span>')
-        return format_html('<span style="color:red;font-weight:600">Inactive</span>')
+        color = "green" if obj.is_active else "red"
+        text = "Active" if obj.is_active else "Inactive"
+
+        return format_html(
+            '<span style="color:{};font-weight:600">{}</span>',
+            color,
+            text,
+        )
 
     is_active_colored.short_description = "Status"
 
 
 @admin.register(SystemClient)
 class SystemClientAdmin(admin.ModelAdmin):
+    change_form_template = "admin/systems/systemclient/change_form.html"
+
     list_display = (
         "name",
         "system",
@@ -250,6 +261,50 @@ class SystemClientAdmin(admin.ModelAdmin):
             )
         }),
     )
+
+    def save_model(self, request, obj, form, change):
+        if not change and obj.client_type != SystemClient.ClientType.PUBLIC:
+            raw_secret = SystemAdminService.generate_client_secret()
+            obj.client_secret_hash = SystemAdminService.hash_client_secret(raw_secret)
+            request._raw_client_secret = raw_secret
+        super().save_model(request, obj, form, change)
+
+    def response_add(self, request, obj, post_url_continue=None):
+        raw_secret = getattr(request, "_raw_client_secret", "")
+        if raw_secret:
+            self._stash_raw_client_secret(request, obj, raw_secret)
+            return HttpResponseRedirect(self._change_url(obj))
+        return super().response_add(request, obj, post_url_continue)
+
+    def response_change(self, request, obj):
+        if "_regenerate_client_secret" in request.POST:
+            try:
+                _, raw_secret = SystemAdminService().regenerate_client_secret(client=obj)
+            except SystemAdminServiceError as exc:
+                self.message_user(request, str(exc), level=messages.ERROR)
+            else:
+                self._stash_raw_client_secret(request, obj, raw_secret)
+            return HttpResponseRedirect(".")
+        return super().response_change(request, obj)
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        raw_secret_key = self._raw_secret_session_key(object_id)
+        raw_secret = request.session.pop(raw_secret_key, "")
+        if raw_secret:
+            request.session.modified = True
+            extra_context["raw_client_secret"] = raw_secret
+        return super().change_view(request, object_id, form_url, extra_context)
+
+    def _change_url(self, obj):
+        return reverse("admin:systems_systemclient_change", args=[obj.pk])
+
+    def _stash_raw_client_secret(self, request, obj, raw_secret: str) -> None:
+        request.session[self._raw_secret_session_key(obj.pk)] = raw_secret
+
+    @staticmethod
+    def _raw_secret_session_key(client_id) -> str:
+        return f"systems.raw_client_secret.{client_id}"
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("system")

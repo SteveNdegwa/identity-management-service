@@ -50,8 +50,8 @@ class PermissionResolverService:
     def _resolve_uncached(self, system_user: SystemUser) -> ResolvedContext:
         ctx = ResolvedContext(
             system_user_id=str(system_user.id),
-            organization_id=str(system_user.organization.id),
-            country_code=system_user.country.code,
+            organization_id=str(system_user.organization.id) if system_user.organization else "",
+            country_code=system_user.country.code if system_user.country else "",
             role=system_user.role.name,
             role_id=str(system_user.role.id),
             resolved_at=timezone.now().isoformat(),

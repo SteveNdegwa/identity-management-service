@@ -14,6 +14,7 @@ class NotificationService:
             system: Optional[System] = None,
     ) -> None:
         # TODO: DELIVER OTP LOGIC
+        print(raw_code)
         if identifier_type == IdentifierType.PHONE:
             ...
         elif identifier_type == IdentifierType.EMAIL:

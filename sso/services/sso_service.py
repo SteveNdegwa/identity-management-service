@@ -1478,7 +1478,7 @@ class SSOService:
             "scope": " ".join(scopes),
             "system_user_id": str(system_user.id),
             "system_id": str(system_user.system.id),
-            "country": system_user.country.code,
+            "country": system_user.country.code if system_user.country else "",
             "role": perm_ctx.role if perm_ctx else "",
             "permissions": list(perm_ctx.permissions) if perm_ctx else [],
             "branches": perm_ctx.accessible_branch_ids if perm_ctx else [],

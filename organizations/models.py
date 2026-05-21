@@ -180,8 +180,7 @@ class OrganizationSettings(BaseModel):
 class OnboardingStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     SUBMITTED = "submitted", "Submitted — Awaiting Review"
-    DOCUMENTS_REQUESTED = "documents_requested", "Additional Documents Requested"
-    UNDER_REVIEW = "under_review", "Under Review"
+    VERIFIED = "verified", "Verified"
     APPROVED = "approved", "Approved"
     REJECTED = "rejected", "Rejected"
     ONBOARDED = "onboarded", "Onboarded"
@@ -300,7 +299,7 @@ class OrganizationOnboarding(BaseModel):
 
     @property
     def is_editable_by_applicant(self):
-        return self.status in (OnboardingStatus.DRAFT, OnboardingStatus.DOCUMENTS_REQUESTED)
+        return self.status in (OnboardingStatus.DRAFT, OnboardingStatus.SUBMITTED)
 
     @property
     def editable_by_client(self):
@@ -436,14 +435,16 @@ class OnboardingDocument(BaseModel):
 class OnboardingActivityType(models.TextChoices):
     CREATED = "created", "Application created"
     UPDATED = "updated", "Application updated"
-    SUBMITTED = "submitted", "Application submitted"
     DOCUMENT_UPLOADED = "document_uploaded", "Document uploaded"
     DOCUMENT_REVIEWED = "document_reviewed", "Document reviewed"
-    DOCUMENT_REQUESTED = "document_requested", "Additional document requested"
     NOTE_ADDED = "note_added", "Note added"
     ASSIGNED = "assigned", "Assigned to reviewer"
     APPROVED = "approved", "Application approved"
     REJECTED = "rejected", "Application rejected"
+    SERVICES_SELECTED = "services_selected", "Services selected"
+    PAYMENT_RECORDED = "payment_recorded", "Payment recorded"
+    VERIFICATION_TRIGGERED = "verification_triggered", "Verification triggered"
+    VERIFICATION_COMPLETED = "verification_completed", "Verification completed"
     ONBOARDED = "onboarded", "Organisation onboarded"
 
 
@@ -490,42 +491,179 @@ class OnboardingActivity(BaseModel):
         return f"{self.activity_type} — {self.onboarding} @ {self.created_at}"
 
 
-class DocumentRequest(BaseModel):
+class OnboardingServiceProduct(BaseModel):
+    system = models.ForeignKey(
+        "systems.System",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="onboarding_service_products",
+    )
+    code = models.SlugField(max_length=80)
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    currency = models.CharField(max_length=3, default="KES")
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "organizations_onboarding_service_product"
+        unique_together = [("system", "code")]
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.currency} {self.amount})"
+
+    @property
+    def total_amount(self):
+        return self.amount + self.tax_amount
+
+
+class OnboardingServiceSelection(BaseModel):
     onboarding = models.ForeignKey(
         OrganizationOnboarding,
         on_delete=models.CASCADE,
-        related_name="document_requests"
+        related_name="service_selections",
     )
-    document_type = models.CharField(max_length=40, choices=DocumentType.choices)
-    label = models.CharField(max_length=120, blank=True)
-    reason = models.TextField()
-    requested_by  = models.ForeignKey(
-        "accounts.SystemUser",
+    service = models.ForeignKey(
+        OnboardingServiceProduct,
         on_delete=models.PROTECT,
-        related_name="issued_document_requests",
+        related_name="onboarding_selections",
     )
-    requested_at = models.DateTimeField(auto_now_add=True)
-    fulfilled_by_document = models.ForeignKey(
-        OnboardingDocument,
+    selected_by = models.ForeignKey(
+        "accounts.SystemUser",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="fulfils_request",
+        related_name="selected_onboarding_services",
     )
-    fulfilled_at = models.DateTimeField(null=True, blank=True)
-    deadline = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = "organizations_document_request"
-        indexes = [models.Index(fields=["onboarding", "fulfilled_at"])]
+        db_table = "organizations_onboarding_service_selection"
+        unique_together = [("onboarding", "service")]
 
     def __str__(self):
-        return f"Request for {self.document_type} on {self.onboarding}"
+        return f"{self.onboarding} / {self.service}"
 
-    @property
-    def is_fulfilled(self):
-        return self.fulfilled_at is not None
 
-    @property
-    def is_overdue(self):
-        return self.deadline is not None and not self.is_fulfilled and timezone.now() > self.deadline
+class OnboardingPayment(BaseModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    onboarding = models.ForeignKey(
+        OrganizationOnboarding,
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    method = models.CharField(max_length=60, blank=True)
+    currency = models.CharField(max_length=3, default="KES")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    external_reference = models.CharField(max_length=120, blank=True, db_index=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    recorded_by = models.ForeignKey(
+        "accounts.SystemUser",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="recorded_onboarding_payments",
+    )
+    service_snapshot = models.JSONField(default=list, blank=True)
+    provider_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "organizations_onboarding_payment"
+        indexes = [models.Index(fields=["onboarding", "status"])]
+
+    def __str__(self):
+        return f"{self.onboarding} / {self.status} / {self.total_amount}"
+
+
+class OnboardingVerificationCheck(BaseModel):
+    class TriggerMode(models.TextChoices):
+        AUTO_AFTER_PAYMENT = "auto_after_payment", "Automatic after payment"
+        MANUAL = "manual", "Manual"
+
+    system = models.ForeignKey(
+        "systems.System",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="onboarding_verification_checks",
+    )
+    code = models.SlugField(max_length=80)
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    integration_code = models.CharField(max_length=120, blank=True)
+    trigger_mode = models.CharField(
+        max_length=30,
+        choices=TriggerMode.choices,
+        default=TriggerMode.AUTO_AFTER_PAYMENT,
+        db_index=True,
+    )
+    is_active = models.BooleanField(default=True)
+    required_for_onboarding = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "organizations_onboarding_verification_check"
+        unique_together = [("system", "code")]
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class OnboardingVerificationRun(BaseModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        TRIGGERED = "triggered", "Triggered"
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+
+    onboarding = models.ForeignKey(
+        OrganizationOnboarding,
+        on_delete=models.CASCADE,
+        related_name="verification_runs",
+    )
+    verification_check = models.ForeignKey(
+        OnboardingVerificationCheck,
+        on_delete=models.PROTECT,
+        related_name="runs",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    trigger_mode = models.CharField(max_length=30, choices=OnboardingVerificationCheck.TriggerMode.choices)
+    external_reference = models.CharField(max_length=120, blank=True, db_index=True)
+    request_payload = models.JSONField(default=dict, blank=True)
+    response_payload = models.JSONField(default=dict, blank=True)
+    result_summary = models.TextField(blank=True)
+    error_message = models.TextField(blank=True)
+    triggered_by = models.ForeignKey(
+        "accounts.SystemUser",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="triggered_onboarding_verifications",
+    )
+    triggered_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "organizations_onboarding_verification_run"
+        indexes = [
+            models.Index(fields=["onboarding", "status"]),
+            models.Index(fields=["onboarding", "verification_check"]),
+        ]
+
+    def __str__(self):
+        return f"{self.onboarding} / {self.verification_check} / {self.status}"

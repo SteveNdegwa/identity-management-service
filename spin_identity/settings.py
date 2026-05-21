@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 
+from corsheaders.defaults import default_headers
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -25,7 +27,7 @@ SECRET_KEY = 'django-insecure-5^@b+7%p-cmdjazo5h1@)ld!d!p4_=czm@0+3jmh(*&!8x7$g5
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
@@ -36,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'storages',
     'accounts',
     'api',
@@ -51,6 +54,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -79,6 +83,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'spin_identity.wsgi.application'
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "X-SSO-Session-Id",
+]
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -126,6 +137,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -137,9 +150,15 @@ AUTHENTICATION_BACKENDS = [
 ]
 SILENCED_SYSTEM_CHECKS = ['auth.W004']
 
+ONBOARDING_DOCUMENTS_USE_LOCAL_STORAGE = True
+
 STORAGES = {
     "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "BACKEND": (
+            "django.core.files.storage.FileSystemStorage"
+            if ONBOARDING_DOCUMENTS_USE_LOCAL_STORAGE
+            else "storages.backends.s3boto3.S3Boto3Storage"
+        ),
     },
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
@@ -159,3 +178,45 @@ AWS_S3_FILE_OVERWRITE = False
 AWS_DEFAULT_ACL = None
 
 AWS_S3_SIGNATURE_VERSION = "s3v4"
+
+# SSO settings
+SSO_ISSUER = "https://accounts.spinmobile.co"
+
+SSO_PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCsvg4QUPzkjAYf
+hCMe5X+IOzukesQj7Aq3lagkgC65a9jOLyyHSJOdgAwdYdpWNoycevZlpQFXnxkN
+oG0CpspT5qcW715NwKbiNtTfMBNMgkJNSce5Lb7qZ4w7vQpj5kVjDLnVJcE7BsmV
+LAEMSacf5Bq06ks8Nqe/qCBDhx/+weIAZR5drDAHrom1AXZ340wPESXYxhVxxZz3
+Yk/GyQwRPZ5fq95ZmccnqW9wrXq+5wMWUS09BEwBcZkVTfyJtXwXB5d3e7yE+6BN
+MHcPG+fDECH3ftICO1rhEvCLmglpx33n/D8k7yQSToCrhJmIjh2C1vOSoJAeNUmk
+pdmF/kWNAgMBAAECggEATKznzTJFrqTAqwiaFkLEQxIXvUCJA3DoqOiTA/CpzMAk
+MhEacMo0S7rkpb4jjhUUgPjLmf6OA/ioxDWrbXvfXzKIhFOnxld3O/4eqxrJ1jIT
+f/752iaGEcH4qyOUExfJQNgLPKNPjAXNQJuRs4SV3EAB4sAEuSuBdj8IYzD9cLSf
++29S4MLy9qPfjqg5FORDvsX6x4RuzI8mmFHtMz4uzGeZq/iXOY3TQLqP4WRXINLc
+0U6y3fPlnORWAR07EE2+wzNlEM/gKwTSnIuiXqONem/mK5+GZ/dUg3mNFPmdaqvk
+di9fuIoUWw07nfs7aDfN5vJZt+NLq9AJnrAbNrb0OQKBgQDMZAkhoKlm+qQ66Ydw
+NG0CGlvdCCRTyyigibconMKTRyjcxMpiSi6OSzdXefB3r4N6U4eBzC462hFzh4PN
+GN/dL66E+ofe7RrfpU1OXNCm3tLqP+YKj49q6ELC6UDZuOASvbaNfO++BKZM052B
+J5IC2W2B1yVs2GXIHcbcKCZSQwKBgQDYXD8jH9bo29bgk1U016WX89AcklU1eKic
+H3J3QQRcAd8OauY+a/0NnJeu2o7S0wleqKw9cv6NVhsA/Bli36hyxVMe8o0a3tos
+V27dNI5qiNhO777HRsK1Ud8UvgunBS52SbnSvvxYizSUIBM5phLp1MuGukr4Dbhd
+wZJAjumT7wKBgCFEawQRLWF4jECWgBfwQInmFmushpUo7QzsPWab1UO5glokobhL
+0LYSYgiX7V7dr226qMSkoiWsFskSFo7MbKuItkQorvLG7ufV9PY7Py7Z98Ru8Bdp
+9HL3KN6mroqBf98tB8iRvEfWY+b/TpSWBzr1ftByX0IPGsnups5wroQXAoGBANBH
+VRxJ/UeiweLk0gSRh76UngWzNMXJxn6sozN76mdsAb9OVyFGMY+V7EsN6Km5MG7o
+bw6kkbmbZ1l2VjXhWrZJkK/dDMsONvayoG3fty2FWL38eyo4yx1jmB3OqUb6bPTA
+GltvMVtHfrENg5RedByXlem3ko3iH1ZaDqGJMgAPAoGAKmoHY/4bLBI7RMaV2fCg
+Dw/LcMYgybrqEzAnO/CFJPz1jfwZZP8vk5CpjECZjHdfg78cdfgjqHAMldreQ4Wj
+HJdNdH5q98HaG7oDiOFoudFTq1mXKu/DfvxSv9NQ8o+2r3vr07fF4XuWhGqHqyZx
+bilIfPaBJ4XuFNlb3lG/xjk=
+-----END PRIVATE KEY-----"""
+
+SSO_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArL4OEFD85IwGH4QjHuV/
+iDs7pHrEI+wKt5WoJIAuuWvYzi8sh0iTnYAMHWHaVjaMnHr2ZaUBV58ZDaBtAqbK
+U+anFu9eTcCm4jbU3zATTIJCTUnHuS2+6meMO70KY+ZFYwy51SXBOwbJlSwBDEmn
+H+QatOpLPDanv6ggQ4cf/sHiAGUeXawwB66JtQF2d+NMDxEl2MYVccWc92JPxskM
+ET2eX6veWZnHJ6lvcK16vucDFlEtPQRMAXGZFU38ibV8FweXd3u8hPugTTB3Dxvn
+wxAh937SAjta4RLwi5oJacd95/w/JO8kEk6Aq4SZiI4dgtbzkqCQHjVJpKXZhf5F
+jQIDAQAB
+-----END PUBLIC KEY-----"""

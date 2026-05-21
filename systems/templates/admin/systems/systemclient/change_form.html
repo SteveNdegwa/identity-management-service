@@ -1,0 +1,80 @@
+{% extends "admin/change_form.html" %}
+
+{% block submit_buttons_bottom %}
+{{ block.super }}
+{% if original and original.client_type != "public" %}
+<div class="submit-row">
+    <input type="submit" name="_regenerate_client_secret" value="Regenerate client secret">
+</div>
+{% endif %}
+{% endblock %}
+
+{% block after_related_objects %}
+{{ block.super }}
+{% if raw_client_secret %}
+<style>
+    .client-secret-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.45);
+        padding: 24px;
+    }
+    .client-secret-modal {
+        width: min(720px, 100%);
+        border-radius: 6px;
+        background: var(--body-bg);
+        color: var(--body-fg);
+        box-shadow: 0 18px 55px rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--border-color);
+    }
+    .client-secret-modal header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .client-secret-modal h2 {
+        margin: 0;
+        font-size: 1rem;
+    }
+    .client-secret-modal button {
+        border: 0;
+        background: transparent;
+        color: var(--body-fg);
+        cursor: pointer;
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+    .client-secret-modal .content {
+        padding: 18px;
+    }
+    .client-secret-modal textarea {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 96px;
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .client-secret-modal p {
+        margin: 0 0 12px;
+    }
+</style>
+<div class="client-secret-backdrop" id="client-secret-modal">
+    <section class="client-secret-modal" role="dialog" aria-modal="true" aria-labelledby="client-secret-title">
+        <header>
+            <h2 id="client-secret-title">Client secret generated</h2>
+            <button type="button" aria-label="Close" onclick="document.getElementById('client-secret-modal').remove()">x</button>
+        </header>
+        <div class="content">
+            <p>This raw client secret is shown once. Store it before closing this window.</p>
+            <textarea readonly autofocus onclick="this.select()">{{ raw_client_secret }}</textarea>
+        </div>
+    </section>
+</div>
+{% endif %}
+{% endblock %}

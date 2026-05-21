@@ -10,6 +10,8 @@ from organizations.models import (
     OrganizationCountry,
     OrganizationOnboarding,
     OrganizationOnboardingCountry,
+    OnboardingPayment,
+    OnboardingServiceProduct,
 )
 from organizations.services.onboarding_service import OnboardingError, OnboardingService
 from permissions.models import Role
@@ -44,6 +46,14 @@ class OnboardingServiceTests(TestCase):
             provisioning_email=self.user.email,
         )
         self.service = OnboardingService()
+        self.onboarding_service_product = OnboardingServiceProduct.objects.create(
+            system=self.system,
+            code="statement-processing",
+            name="Statement Processing",
+            amount="1000.00",
+            tax_amount="160.00",
+            currency="KES",
+        )
 
     @staticmethod
     def _documents():
@@ -56,6 +66,19 @@ class OnboardingServiceTests(TestCase):
         for document in onboarding.documents.all():
             document.status = DocumentStatus.APPROVED
             document.save(update_fields=["status"])
+
+    def _pay_onboarding(self, onboarding):
+        self.service.set_selected_services(
+            onboarding=onboarding,
+            performed_by=self.system_user,
+            service_codes=["statement-processing"],
+        )
+        self.service.record_payment(
+            onboarding=onboarding,
+            performed_by=self.system_user,
+            method="test",
+            status=OnboardingPayment.Status.SUCCESS,
+        )
 
     def test_create_application_supports_multiple_countries(self):
         onboarding = self.service.create_application(
@@ -198,7 +221,8 @@ class OnboardingServiceTests(TestCase):
             legal_name="Acme Holdings Ltd",
             documents=self._documents(),
         )
-        self.service.submit(onboarding, self.system_user)
+        self._approve_documents(onboarding)
+        self.service.approve(onboarding, self.system_user)
 
         with self.assertRaises(OnboardingError):
             self.service.update_country(
@@ -219,9 +243,8 @@ class OnboardingServiceTests(TestCase):
         )
         self._approve_documents(onboarding)
 
-        self.service.submit(onboarding, self.system_user)
-        self.service.start_review(onboarding, self.system_user)
         self.service.approve(onboarding, self.system_user)
+        self._pay_onboarding(onboarding)
         organization = self.service.complete_onboarding(onboarding, self.system_user)
 
         onboarding.refresh_from_db()
@@ -241,9 +264,8 @@ class OnboardingServiceTests(TestCase):
             documents=self._documents(),
         )
         self._approve_documents(first_onboarding)
-        self.service.submit(first_onboarding, self.system_user)
-        self.service.start_review(first_onboarding, self.system_user)
         self.service.approve(first_onboarding, self.system_user)
+        self._pay_onboarding(first_onboarding)
         organization = self.service.complete_onboarding(first_onboarding, self.system_user)
 
         second_onboarding = self.service.create_country_application_for_onboarded_organization(
@@ -255,9 +277,8 @@ class OnboardingServiceTests(TestCase):
             documents=self._documents(),
         )
         self._approve_documents(second_onboarding)
-        self.service.submit(second_onboarding, self.system_user)
-        self.service.start_review(second_onboarding, self.system_user)
         self.service.approve(second_onboarding, self.system_user)
+        self._pay_onboarding(second_onboarding)
         returned_organization = self.service.complete_onboarding(second_onboarding, self.system_user)
 
         self.assertEqual(returned_organization, organization)

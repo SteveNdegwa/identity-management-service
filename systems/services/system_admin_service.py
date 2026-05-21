@@ -19,6 +19,17 @@ class SystemAdminServiceError(Exception):
 
 class SystemAdminService:
     @staticmethod
+    def generate_client_secret() -> str:
+        return secrets.token_urlsafe(48)
+
+    @staticmethod
+    def hash_client_secret(raw_secret: str) -> str:
+        return bcrypt.hashpw(
+            raw_secret.encode(),
+            bcrypt.gensalt(),
+        ).decode()
+
+    @staticmethod
     def _normalize_social_providers(providers: Optional[list]) -> Optional[list]:
         if providers is None:
             return None
@@ -308,11 +319,8 @@ class SystemAdminService:
         raw_secret = ""
         secret_hash = ""
         if client_type != SystemClient.ClientType.PUBLIC:
-            raw_secret = secrets.token_urlsafe(48)
-            secret_hash = bcrypt.hashpw(
-                raw_secret.encode(),
-                bcrypt.gensalt(),
-            ).decode()
+            raw_secret = self.generate_client_secret()
+            secret_hash = self.hash_client_secret(raw_secret)
 
         client = SystemClient.objects.create(
             system=system,
@@ -342,6 +350,28 @@ class SystemAdminService:
                 "client_name": client.name,
                 "client_type": client.client_type,
             },
+        )
+        return client, raw_secret
+
+    @transaction.atomic
+    def regenerate_client_secret(
+        self,
+        *,
+        client: SystemClient,
+        performed_by: Optional[SystemUser] = None,
+    ) -> tuple[SystemClient, str]:
+        if client.client_type == SystemClient.ClientType.PUBLIC:
+            raise SystemAdminServiceError("Public clients do not use client secrets.")
+
+        raw_secret = self.generate_client_secret()
+        client.client_secret_hash = self.hash_client_secret(raw_secret)
+        client.save(update_fields=["client_secret_hash", "updated_at"])
+
+        self._audit(
+            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            actor_system_user=performed_by,
+            subject=client,
+            payload={"action": "client_secret_regenerated"},
         )
         return client, raw_secret
 

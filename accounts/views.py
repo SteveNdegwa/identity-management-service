@@ -36,6 +36,7 @@ from sso.services.sso_service import (
 from systems.models import System, SystemClient
 from utils.decorators import require_active_session, require_user_context
 from utils.extended_request import ExtendedRequest
+from utils.countries import get_country_from_data
 from utils.response_provider import ResponseProvider
 
 logger = logging.getLogger(__name__)
@@ -66,13 +67,7 @@ def _get_role(data: dict, system: System) -> Optional[Role]:
 
 
 def _get_country(data: dict) -> Optional[Country]:
-    cid = data.get("country_id") or data.get("country")
-    if not cid:
-        return None
-    try:
-        return Country.objects.get(id=cid)
-    except Country.DoesNotExist:
-        return None
+    return get_country_from_data(data)
 
 
 def _get_organization(data: dict) -> Optional[Organization]:
@@ -330,16 +325,8 @@ def register_view(request: ExtendedRequest) -> JsonResponse:
                 message="System not found or inactive."
             )
 
-        role = _get_role(data, system)
-        if not role:
-            return ResponseProvider.bad_request(
-                error="invalid_role",
-                message="Role not found."
-            )
-
         user, system_user = account_service.self_registration(
             system=system,
-            role=role,
             primary_country=_get_country(data),
             ip_address=request.client_ip,
             email=data.get("email"),
@@ -385,13 +372,6 @@ def register_link_view(request: ExtendedRequest) -> JsonResponse:
                 message="System not found or inactive."
             )
 
-        role = _get_role(data, system)
-        if not role:
-            return ResponseProvider.bad_request(
-                error="invalid_role",
-                message="Role not found."
-            )
-
         try:
             existing_user = User.objects.get(id=data["existing_user_id"])
         except (User.DoesNotExist, KeyError):
@@ -403,7 +383,6 @@ def register_link_view(request: ExtendedRequest) -> JsonResponse:
         user, system_user = account_service.self_registration_link(
             existing_user=existing_user,
             system=system,
-            role=role,
             primary_country=_get_country(data),
             referral_code=data.get("referral_code"),
             ip_address=request.client_ip,
@@ -414,7 +393,9 @@ def register_link_view(request: ExtendedRequest) -> JsonResponse:
             if system.password_type == System.PasswordType.PIN
             else SSOSession.AuthMethod.PASSWORD
         )
-        return _post_registration_response(request, system, user, system_user, auth_method)
+        return _post_registration_response(
+            request, system, user, system_user, auth_method
+        )
 
     except SelfRegistrationError as e:
         return ResponseProvider.bad_request(
@@ -432,10 +413,17 @@ def register_social_view(request: ExtendedRequest) -> JsonResponse:
         data = request.data
         system = _get_system(data)
         if not system:
-            return ResponseProvider.bad_request(error="invalid_system", message="System not found or inactive.")
+            return ResponseProvider.bad_request(
+                error="invalid_system",
+                message="System not found or inactive."
+            )
+
         role = _get_role(data, system)
         if not role:
-            return ResponseProvider.bad_request(error="invalid_role", message="Role not found.")
+            return ResponseProvider.bad_request(
+                error="invalid_role",
+                message="Role not found."
+            )
 
         user, system_user = account_service.self_registration_social(
             system=system,
@@ -449,16 +437,20 @@ def register_social_view(request: ExtendedRequest) -> JsonResponse:
             **_social_fields(data),
             **_verification_ids(data),
         )
-        return _post_registration_response(request, system, user, system_user, SSOSession.AuthMethod.SOCIAL)
+        return _post_registration_response(
+            request, system, user, system_user, SSOSession.AuthMethod.SOCIAL
+        )
     except LinkAccountRequired as e:
-        return JsonResponse({
-            "success": False,
-            "link_required": True,
-            "matched_on": e.matched_on,
-            "existing_user_id": str(e.existing_user.id),
-        }, status=409)
+        return ResponseProvider.conflict(
+            link_required=True,
+            matched_on=e.matched_on,
+            existing_user_id=str(e.existing_user.id),
+        )
     except SelfRegistrationError as e:
-        return ResponseProvider.bad_request(error="registration_error", message=str(e))
+        return ResponseProvider.bad_request(
+            error="registration_error",
+            message=str(e)
+        )
     except Exception as e:
         logger.exception("register_social_view: %s", e)
         return ResponseProvider.server_error()
@@ -470,30 +462,43 @@ def register_social_link_view(request: ExtendedRequest) -> JsonResponse:
         data = request.data
         system = _get_system(data)
         if not system:
-            return ResponseProvider.bad_request(error="invalid_system", message="System not found or inactive.")
+            return ResponseProvider.bad_request(
+                error="invalid_system",
+                message="System not found or inactive."
+            )
+
         role = _get_role(data, system)
         if not role:
-            return ResponseProvider.bad_request(error="invalid_role", message="Role not found.")
+            return ResponseProvider.bad_request(
+                error="invalid_role",
+                message="Role not found."
+            )
+
         try:
             existing_user = User.objects.get(id=data["existing_user_id"])
         except (User.DoesNotExist, KeyError):
-            return ResponseProvider.bad_request(error="invalid_user", message="User not found.")
+            return ResponseProvider.bad_request(
+                error="invalid_user",
+                message="User not found."
+            )
 
         user, system_user = account_service.self_registration_social_link(
             existing_user=existing_user,
             system=system,
             role=role,
             primary_country=_get_country(data),
-            organization=_get_organization(data),
             referral_code=data.get("referral_code"),
-            email=data.get("email"),
-            phone_number=data.get("phone_number"),
             ip_address=request.client_ip,
             **_social_fields(data),
         )
-        return _post_registration_response(request, system, user, system_user, SSOSession.AuthMethod.SOCIAL)
+        return _post_registration_response(
+            request, system, user, system_user, SSOSession.AuthMethod.SOCIAL
+        )
     except SelfRegistrationError as e:
-        return ResponseProvider.bad_request(error="registration_error", message=str(e))
+        return ResponseProvider.bad_request(
+            error="registration_error",
+            message=str(e)
+        )
     except Exception as e:
         logger.exception("register_social_link_view: %s", e)
         return ResponseProvider.server_error()
@@ -541,15 +546,18 @@ def claim_view(request: ExtendedRequest) -> JsonResponse:
             update_email_available=True,
             existing_user={
                 "user_id": str(e.existing_user.id),
-                "email": account_service._mask_email(e.existing_user.email),
-                "phone_number": account_service._mask_phone(e.existing_user.phone_number),
+                "email": account_service.mask_email(e.existing_user.email),
+                "phone_number": account_service.mask_phone(e.existing_user.phone_number),
                 "first_name": e.existing_user.first_name,
                 "last_name": e.existing_user.last_name,
             },
             message=str(e),
         )
     except (ClaimError, InvalidClaimTokenError, ClaimExpiredError, RegistrationClosedError) as e:
-        return ResponseProvider.bad_request(error="claim_error", message=str(e))
+        return ResponseProvider.bad_request(
+            error="claim_error",
+            message=str(e)
+        )
     except Exception as e:
         logger.exception("claim_view: %s", e)
         return ResponseProvider.server_error()
@@ -560,7 +568,11 @@ def claim_view(request: ExtendedRequest) -> JsonResponse:
 def me_view(request: ExtendedRequest) -> JsonResponse:
     try:
         user = request.sso_session.user
-        memberships = SystemUser.objects.filter(user=user, status="active").select_related("system", "organization", "country", "role")
+        memberships =(
+            SystemUser.objects
+            .filter(user=user, status="active")
+            .select_related("system", "organization", "country", "role")
+        )
         return ResponseProvider.success(
             user=_user_payload(user),
             memberships=[_system_user_payload(membership) for membership in memberships],
@@ -570,15 +582,18 @@ def me_view(request: ExtendedRequest) -> JsonResponse:
         return ResponseProvider.server_error()
 
 
-@require_active_session
+@require_user_context
 @require_http_methods(["PATCH"])
 def me_update_view(request: ExtendedRequest) -> JsonResponse:
     try:
-        system_user = request.system_user or request.sso_session.user.system_users.filter(status="active").first()
-        if not system_user:
-            return ResponseProvider.bad_request(error="missing_context", message="No active system context found.")
-        updated = account_service.update_profile(system_user=system_user, **request.data)
-        return ResponseProvider.success(user=_user_payload(updated.user), system_user=_system_user_payload(updated))
+        updated = account_service.update_profile(
+            system_user=request.system_user,
+            **request.data
+        )
+        return ResponseProvider.success(
+            user=_user_payload(updated.user),
+            system_user=_system_user_payload(updated)
+        )
     except SelfRegistrationError as e:
         return ResponseProvider.bad_request(error="profile_error", message=str(e))
     except Exception as e:

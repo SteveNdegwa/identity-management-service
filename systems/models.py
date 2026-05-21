@@ -58,6 +58,8 @@ class System(BaseModel):
     mfa_required_enforced = models.BooleanField(default=False)
     allowed_mfa_methods = models.JSONField(
         default=list,
+        blank=True,
+        null=True,
         help_text="Empty = all MFA methods permitted. Non-empty = restrict to listed methods.",
     )
 
@@ -79,6 +81,15 @@ class System(BaseModel):
         )
     )
 
+    default_role = models.ForeignKey(
+        "permissions.Role",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Default role for systems that allow self registration.",
+        related_name="default_role"
+    )
+
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -95,6 +106,10 @@ class System(BaseModel):
                 raise ValidationError(
                     "System realm cannot be changed after creation."
                 )
+        if self.registration_open and not self.default_role:
+            raise ValidationError(
+                "Referrals can only be enabled for systems that allow self-registration."
+            )
         self.allowed_social_providers = normalize_social_provider_list(self.allowed_social_providers)
         if self.allows_referrals and not self.registration_open:
             raise ValidationError(
@@ -139,9 +154,9 @@ class SystemClient(BaseModel):
         choices=ClientType.choices,
         default=ClientType.CONFIDENTIAL,
     )
-    redirect_uris = models.JSONField(default=list)
-    logout_uris = models.JSONField(default=list)
-    allowed_scopes = models.JSONField(default=list)
+    redirect_uris = models.JSONField(default=list, null=True, blank=True)
+    logout_uris = models.JSONField(default=list, null=True, blank=True)
+    allowed_scopes = models.JSONField(default=list, null=True, blank=True)
     access_token_ttl = models.PositiveIntegerField(default=0)
     refresh_token_ttl = models.PositiveIntegerField(default=0)
     id_token_ttl = models.PositiveIntegerField(default=0)

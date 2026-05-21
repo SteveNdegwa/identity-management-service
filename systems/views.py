@@ -10,6 +10,7 @@ from systems.services.system_admin_service import (
     SystemAdminService,
     SystemAdminServiceError,
 )
+from utils.countries import get_countries_from_values, get_country_from_data
 from utils.social_providers import SocialProvider
 from utils.decorators import user_login_required
 from utils.extended_request import ExtendedRequest
@@ -27,13 +28,7 @@ def _get_system(system_id: str) -> Optional[System]:
 
 
 def _get_country(data: dict) -> Optional[Country]:
-    cid = data.get("country_id") or data.get("country")
-    if not cid:
-        return None
-    try:
-        return Country.objects.get(id=cid)
-    except Country.DoesNotExist:
-        return None
+    return get_country_from_data(data)
 
 
 def _get_realm(data: dict) -> Optional[Realm]:
@@ -187,12 +182,12 @@ def system_create_view(request: ExtendedRequest) -> JsonResponse:
                 message="realm_id is required.",
             )
 
-        country_ids = data.get("country_ids") or data.get("countries") or []
-        countries = list(Country.objects.filter(id__in=country_ids)) if country_ids else []
-        if country_ids and len(countries) != len(country_ids):
+        country_values = data.get("country_ids") or data.get("country_codes") or data.get("countries") or []
+        countries = get_countries_from_values(country_values)
+        if country_values and len(countries) != len(country_values):
             return ResponseProvider.bad_request(
                 error="invalid_country",
-                message="One or more country_ids are invalid.",
+                message="One or more countries are invalid.",
             )
 
         system = system_service.create_system(
@@ -551,6 +546,34 @@ def client_update_view(request: ExtendedRequest, client_id: str) -> JsonResponse
         )
     except Exception as e:
         logger.exception("client_update_view: %s", e)
+        return ResponseProvider.server_error()
+
+
+@user_login_required(required_permission="system.manage_clients")
+@require_POST
+def client_regenerate_secret_view(request: ExtendedRequest, client_id: str) -> JsonResponse:
+    client = _get_client(client_id)
+    if not client:
+        return ResponseProvider.not_found(
+            error="not_found",
+            message="Client not found.",
+        )
+
+    try:
+        client, raw_secret = system_service.regenerate_client_secret(
+            client=client,
+            performed_by=request.system_user,
+        )
+        payload = _client_payload(client)
+        payload["client_secret"] = raw_secret
+        return ResponseProvider.success(**payload)
+    except SystemAdminServiceError as e:
+        return ResponseProvider.bad_request(
+            error="system_management_error",
+            message=str(e),
+        )
+    except Exception as e:
+        logger.exception("client_regenerate_secret_view: %s", e)
         return ResponseProvider.server_error()
 
 

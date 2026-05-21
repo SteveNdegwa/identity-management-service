@@ -179,8 +179,8 @@ class AccountService:
         existing_user_details = {
             "first_name": existing_user.first_name,
             "last_name": existing_user.last_name,
-            "phone_number": self._mask_phone(existing_user.phone_number),
-            "email": self._mask_email(existing_user.email),
+            "phone_number": self.mask_phone(existing_user.phone_number),
+            "email": self.mask_email(existing_user.email),
             "system_users": list(
                 SystemUser.objects
                 .filter(user=existing_user, status=SystemUserStatus.ACTIVE)
@@ -209,7 +209,7 @@ class AccountService:
             "role": su.role.name,
             "country": su.country.code if su.country_id else None,
             "status": su.status,
-            "provisioning_email": self._mask_email(su.provisioning_email),
+            "provisioning_email": self.mask_email(su.provisioning_email),
             "existing_account_found": existing_user is not None,
             "existing_user_details": existing_user_details,
             "available_action": "link" if existing_user else "new",
@@ -341,7 +341,6 @@ class AccountService:
     def self_registration(
             self,
             system: System,
-            role: Role,
             first_name: str,
             last_name: str,
             middle_name: str = "",
@@ -360,6 +359,9 @@ class AccountService:
     ) -> Tuple[User, SystemUser]:
         if not system.registration_open:
             raise RegistrationClosedError("This system does not allow self-registration.")
+
+        if not system.default_role:
+            raise SelfRegistrationError("Default role not set for this system.")
 
         self._validate_required_profile(first_name, last_name, date_of_birth, gender)
 
@@ -406,7 +408,7 @@ class AccountService:
         system_user = self._create_system_user_record(
             user=user,
             system=system,
-            role=role,
+            role=system.default_role,
             primary_country=primary_country,
         )
         self._attach_referral_if_present(system_user, referral_code)
@@ -425,7 +427,6 @@ class AccountService:
             self,
             existing_user: User,
             system: System,
-            role: Role,
             primary_country: Optional[Country] = None,
             referral_code: Optional[str] = None,
             ip_address: str = "",
@@ -433,13 +434,16 @@ class AccountService:
         if existing_user.realm_id and existing_user.realm_id != system.realm_id:
             raise SelfRegistrationError("User realm and system realm do not match.")
 
+        if not system.default_role:
+            raise SelfRegistrationError("Default role not set for this system.")
+
         if SystemUser.objects.filter(user=existing_user, system=system, status=SystemUserStatus.ACTIVE).exists():
             raise SelfRegistrationError("This account is already registered in this system.")
 
         system_user = self._create_system_user_record(
             user=existing_user,
             system=system,
-            role=role,
+            role=system.default_role,
             primary_country=primary_country,
         )
 
@@ -904,10 +908,10 @@ class AccountService:
             raise SelfRegistrationError("First name is required.")
         if not last_name:
             raise SelfRegistrationError("Last name is required.")
-        if not date_of_birth:
-            raise SelfRegistrationError("Date of birth is required.")
-        if not gender:
-            raise SelfRegistrationError("Gender is required.")
+        # if not date_of_birth:
+        #     raise SelfRegistrationError("Date of birth is required.")
+        # if not gender:
+        #     raise SelfRegistrationError("Gender is required.")
 
     @staticmethod
     def _require_email_and_phone(email: Optional[str], phone_number: Optional[str]) -> Tuple[str, str]:
@@ -1059,7 +1063,7 @@ class AccountService:
         return provider
 
     @staticmethod
-    def _mask_email(email: str) -> str:
+    def mask_email(email: str) -> str:
         local, _, domain = email.partition("@")
         if not local or not domain:
             return email
@@ -1070,7 +1074,7 @@ class AccountService:
         return f"{masked_local}@{domain}"
 
     @staticmethod
-    def _mask_phone(phone: str) -> str:
+    def mask_phone(phone: str) -> str:
         if not phone:
             return phone
 

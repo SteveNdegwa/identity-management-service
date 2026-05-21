@@ -18,6 +18,7 @@ urlpatterns = [
     path("<str:system_id>/clients/create/", views.client_create_view, name="system-client-create"),
     path("clients/<str:client_id>/", views.client_detail_view, name="system-client-detail"),
     path("clients/<str:client_id>/update/", views.client_update_view, name="system-client-update"),
+    path("clients/<str:client_id>/regenerate-secret/", views.client_regenerate_secret_view, name="system-client-regenerate-secret"),
     path("clients/<str:client_id>/deactivate/", views.client_deactivate_view, name="system-client-deactivate"),
     path("clients/<str:client_id>/reactivate/", views.client_reactivate_view, name="system-client-reactivate"),
 

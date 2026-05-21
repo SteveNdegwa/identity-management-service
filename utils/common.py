@@ -8,6 +8,11 @@ import bcrypt
 
 logger = logging.getLogger(__name__)
 
+DUMMY_BCRYPT_HASH = bcrypt.hashpw(
+    b"dummy-password",
+    bcrypt.gensalt()
+)
+
 
 def hash_value(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
@@ -27,10 +32,7 @@ def generate_otp() -> str:
 
 
 def dummy_bcrypt():
-    bcrypt.checkpw(
-        b"dummy",
-        b"$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    )
+    bcrypt.checkpw(b"dummy", DUMMY_BCRYPT_HASH)
 
 
 def get_client_ip(request):
@@ -57,6 +59,26 @@ def sanitize_data(data: Optional[dict]) -> Optional[dict]:
     return _sanitize(data)
 
 
+def parse_form_value(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+
+    clean_value = value.strip()
+    if not clean_value:
+        return value
+    if clean_value[0] not in "[{":
+        return value
+
+    try:
+        return json.loads(clean_value)
+    except json.JSONDecodeError:
+        return value
+
+
+def parse_form_data(data: dict) -> dict:
+    return {key: parse_form_value(value) for key, value in data.items()}
+
+
 def get_request_data(request) -> dict:
     try:
         if request is None:
@@ -76,7 +98,7 @@ def get_request_data(request) -> dict:
 
         elif 'multipart/form-data' in content_type or \
                 'application/x-www-form-urlencoded' in content_type:
-            data = request.POST.dict()
+            data = parse_form_data(request.POST.dict())
 
         else:
             try:

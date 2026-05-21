@@ -1,8 +1,9 @@
 import datetime
+from decimal import Decimal
 from typing import Optional
 
 from django.core.files.uploadedfile import UploadedFile
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -18,9 +19,13 @@ from organizations.models import (
     DocumentStatus,
     OnboardingActivity,
     OnboardingActivityType,
-    DocumentRequest,
     MANDATORY_DOCUMENT_TYPES,
     MANDATORY_DOCUMENT_LABELS,
+    OnboardingPayment,
+    OnboardingServiceProduct,
+    OnboardingServiceSelection,
+    OnboardingVerificationCheck,
+    OnboardingVerificationRun,
 )
 from systems.models import System
 
@@ -108,7 +113,8 @@ class OnboardingService:
             system=system,
             contact_system_user=contact_system_user,
             organization=organization,
-            status=OnboardingStatus.DRAFT,
+            status=OnboardingStatus.SUBMITTED,
+            submitted_at=timezone.now(),
             legal_name=legal_name.strip(),
             trading_name=trading_name,
             organization_type=organization_type,
@@ -146,7 +152,7 @@ class OnboardingService:
             activity_type=OnboardingActivityType.CREATED,
             performed_by=contact_system_user,
             description="Onboarding application created",
-            new_status=OnboardingStatus.DRAFT,
+            new_status=OnboardingStatus.SUBMITTED,
         )
         return onboarding
 
@@ -338,7 +344,8 @@ class OnboardingService:
             system=organization.system,
             contact_system_user=contact_system_user,
             organization=organization,
-            status=OnboardingStatus.DRAFT,
+            status=OnboardingStatus.SUBMITTED,
+            submitted_at=timezone.now(),
             legal_name=organization.name,
             trading_name=organization.name,
             contact_email=contact_system_user.provisioning_email or contact_system_user.user.email,
@@ -366,8 +373,15 @@ class OnboardingService:
             activity_type=OnboardingActivityType.CREATED,
             performed_by=contact_system_user,
             description=f"New country onboarding request created for {organization.name}: {country.code}.",
-            new_status=OnboardingStatus.DRAFT,
+            new_status=OnboardingStatus.SUBMITTED,
             payload={"organization_id": str(organization.id)},
+        )
+        self._log(
+            onboarding=onboarding,
+            activity_type=OnboardingActivityType.SUBMITTED,
+            performed_by=contact_system_user,
+            description="Application submitted for review.",
+            new_status=OnboardingStatus.SUBMITTED,
         )
         return onboarding
 
@@ -395,114 +409,20 @@ class OnboardingService:
         )
 
     @transaction.atomic
-    def submit(self, onboarding: OrganizationOnboarding, performed_by: SystemUser) -> OrganizationOnboarding:
-        if onboarding.status not in (OnboardingStatus.DRAFT,OnboardingStatus.DOCUMENTS_REQUESTED):
-            raise OnboardingError(f"Cannot submit an application in status '{onboarding.status}'.")
-
-        if not onboarding.country_requests.exists():
-            raise OnboardingError("At least one country is required.")
-        self._assert_mandatory_documents_present(onboarding)
-
-        prev = onboarding.status
-        onboarding.status = OnboardingStatus.SUBMITTED
-        onboarding.submitted_at = timezone.now()
-        onboarding.save(update_fields=["status","submitted_at"])
-
-        self._log(
-            onboarding=onboarding,
-            activity_type=OnboardingActivityType.SUBMITTED,
-            performed_by=performed_by,
-            description="Application submitted for review.",
-            previous_status=prev,
-            new_status=OnboardingStatus.SUBMITTED,
-        )
-        return onboarding
-
-    @transaction.atomic
-    def start_review(self, onboarding: OrganizationOnboarding, performed_by: SystemUser) -> OrganizationOnboarding:
-        if onboarding.status != OnboardingStatus.SUBMITTED:
-            raise OnboardingError("Can only start review on a submitted application.")
-
-        prev = onboarding.status
-        onboarding.status = OnboardingStatus.UNDER_REVIEW
-        onboarding.assigned_to = performed_by
-        onboarding.reviewed_at = timezone.now()
-        onboarding.save(update_fields=["status","assigned_to","reviewed_at"])
-
-        self._log(
-            onboarding=onboarding,
-            activity_type=OnboardingActivityType.ASSIGNED,
-            performed_by=performed_by,
-            description=f"Review started and assigned to {performed_by.full_name}.",
-            previous_status=prev,
-            new_status=OnboardingStatus.UNDER_REVIEW,
-            payload={"assigned_to_id":str(performed_by.id)},
-        )
-        return onboarding
-
-    @transaction.atomic
-    def request_documents(
-            self,
-            onboarding: OrganizationOnboarding,
-            performed_by: SystemUser,
-            document_type: str,
-            reason: str,
-            label: str = "",
-            deadline: Optional[datetime.datetime] = None,
-            applicant_notes: str = ""
-    ) -> DocumentRequest:
-        if onboarding.status not in (OnboardingStatus.UNDER_REVIEW,OnboardingStatus.SUBMITTED):
-            raise OnboardingError("Can only request documents while reviewing an application.")
-
-        if not reason.strip():
-            raise OnboardingError("A reason for the document request is required.")
-
-        doc_request = DocumentRequest.objects.create(
-            onboarding=onboarding,
-            document_type=document_type,
-            label=label,
-            reason=reason,
-            requested_by=performed_by,
-            deadline=deadline,
-        )
-
-        prev = onboarding.status
-        onboarding.status = OnboardingStatus.DOCUMENTS_REQUESTED
-        if applicant_notes:
-            onboarding.applicant_notes = (onboarding.applicant_notes+f"\n\n{applicant_notes}").strip()
-        onboarding.save(update_fields=["status","applicant_notes"])
-
-        self._log(
-            onboarding=onboarding,
-            activity_type=OnboardingActivityType.DOCUMENT_REQUESTED,
-            performed_by=performed_by,
-            description=f"Additional document requested: {document_type}. Reason: {reason}",
-            previous_status=prev,
-            new_status=OnboardingStatus.DOCUMENTS_REQUESTED,
-            payload={
-                "document_request_id":str(doc_request.id),
-                "document_type":document_type,
-                "reason":reason,
-                "deadline":deadline.isoformat() if deadline else None,
-            },
-        )
-        return doc_request
-
-    @transaction.atomic
     def approve(
             self,
             onboarding: OrganizationOnboarding,
             performed_by: SystemUser,
             internal_notes: str = ""
     ) -> OrganizationOnboarding:
-        if onboarding.status != OnboardingStatus.UNDER_REVIEW:
-            raise OnboardingError("Can only approve an application that is under review.")
+        if onboarding.status != OnboardingStatus.SUBMITTED:
+            raise OnboardingError("Can only verify a submitted application.")
 
         if onboarding.documents.filter(status=DocumentStatus.PENDING).exists():
             raise OnboardingError("All documents must be reviewed before approval.")
 
         prev = onboarding.status
-        onboarding.status = OnboardingStatus.APPROVED
+        onboarding.status = OnboardingStatus.VERIFIED
         onboarding.completed_at = timezone.now()
         if internal_notes:
             onboarding.internal_notes = (onboarding.internal_notes+f"\n\n{internal_notes}").strip()
@@ -512,9 +432,9 @@ class OnboardingService:
             onboarding=onboarding,
             activity_type=OnboardingActivityType.APPROVED,
             performed_by=performed_by,
-            description="Application approved.",
+            description="Application verified.",
             previous_status=prev,
-            new_status=OnboardingStatus.APPROVED,
+            new_status=OnboardingStatus.VERIFIED,
         )
         return onboarding
 
@@ -527,8 +447,8 @@ class OnboardingService:
             applicant_notes: str = "",
             internal_notes: str = ""
     ) -> OrganizationOnboarding:
-        if onboarding.status not in (OnboardingStatus.UNDER_REVIEW, OnboardingStatus.SUBMITTED):
-            raise OnboardingError("Can only reject a submitted or under-review application.")
+        if onboarding.status != OnboardingStatus.SUBMITTED:
+            raise OnboardingError("Can only reject a submitted application.")
 
         if not reason.strip():
             raise OnboardingError("A rejection reason is required.")
@@ -554,8 +474,10 @@ class OnboardingService:
 
     @transaction.atomic
     def complete_onboarding(self, onboarding: OrganizationOnboarding, performed_by: SystemUser) -> Organization:
-        if onboarding.status != OnboardingStatus.APPROVED:
-            raise OnboardingError("Can only complete an approved application.")
+        if onboarding.status not in (OnboardingStatus.VERIFIED, OnboardingStatus.APPROVED):
+            raise OnboardingError("Can only complete a verified application.")
+        if not self.has_successful_payment(onboarding):
+            raise OnboardingError("Onboarding fee must be paid before completing onboarding.")
 
         if onboarding.organization_id and onboarding.created_organization_id:
             return onboarding.organization
@@ -606,7 +528,7 @@ class OnboardingService:
             activity_type=OnboardingActivityType.ONBOARDED,
             performed_by=performed_by,
             description=f"Organisation '{org.name}' onboarded.",
-            previous_status=OnboardingStatus.APPROVED,
+            previous_status=OnboardingStatus.VERIFIED,
             new_status=OnboardingStatus.ONBOARDED,
             payload={
                 "organization_id": str(org.id),
@@ -625,7 +547,6 @@ class OnboardingService:
             file: UploadedFile,
             label: str = "",
             expires_at: Optional[datetime.datetime]=None,
-            fulfils_request_id:Optional[str] = None
     ) -> OnboardingDocument:
         if not onboarding.is_editable_by_applicant:
             raise OnboardingError(f"Documents cannot be uploaded in status '{onboarding.status}'.")
@@ -644,25 +565,6 @@ class OnboardingService:
             replaces=previous,
         )
 
-        if fulfils_request_id:
-            DocumentRequest.objects.filter(
-                id=fulfils_request_id,
-                onboarding=onboarding,
-                fulfilled_at__isnull=True
-            ).update(
-                fulfilled_by_document=doc,
-                fulfilled_at=timezone.now()
-            )
-        else:
-            DocumentRequest.objects.filter(
-                onboarding=onboarding,
-                document_type=document_type,
-                fulfilled_at__isnull=True
-            ).update(
-                fulfilled_by_document=doc,
-                fulfilled_at=timezone.now()
-            )
-
         self._log(
             onboarding=onboarding,
             activity_type=OnboardingActivityType.DOCUMENT_UPLOADED,
@@ -677,6 +579,190 @@ class OnboardingService:
             },
         )
         return doc
+
+    @transaction.atomic
+    def set_selected_services(
+        self,
+        onboarding: OrganizationOnboarding,
+        performed_by: SystemUser,
+        service_codes: list[str],
+    ) -> list[OnboardingServiceSelection]:
+        services = list(
+            OnboardingServiceProduct.objects.filter(
+                code__in=service_codes,
+                is_active=True,
+            ).filter(models.Q(system__isnull=True) | models.Q(system=onboarding.system))
+        )
+        found_codes = {service.code for service in services}
+        missing = [code for code in service_codes if code not in found_codes]
+        if missing:
+            raise OnboardingError(f"Unknown onboarding services: {', '.join(missing)}.")
+
+        onboarding.service_selections.exclude(service__code__in=service_codes).delete()
+        selections = []
+        for service in services:
+            selection, _ = OnboardingServiceSelection.objects.get_or_create(
+                onboarding=onboarding,
+                service=service,
+                defaults={"selected_by": performed_by},
+            )
+            selections.append(selection)
+
+        self._log(
+            onboarding=onboarding,
+            activity_type=OnboardingActivityType.SERVICES_SELECTED,
+            performed_by=performed_by,
+            description="Onboarding services selected.",
+            payload={"service_codes": service_codes},
+        )
+        return selections
+
+    @transaction.atomic
+    def record_payment(
+        self,
+        onboarding: OrganizationOnboarding,
+        performed_by: Optional[SystemUser],
+        *,
+        method: str,
+        status: str,
+        external_reference: str = "",
+        provider_payload: Optional[dict] = None,
+        amount: Optional[Decimal] = None,
+        tax_amount: Optional[Decimal] = None,
+        currency: str = "",
+    ) -> OnboardingPayment:
+        if status not in OnboardingPayment.Status.values:
+            raise OnboardingError("Invalid payment status.")
+
+        selections = list(onboarding.service_selections.select_related("service"))
+        if not selections:
+            raise OnboardingError("Select onboarding services before recording payment.")
+
+        service_snapshot = []
+        expected_amount = Decimal("0")
+        expected_tax = Decimal("0")
+        payment_currency = currency or selections[0].service.currency
+        for selection in selections:
+            service = selection.service
+            service_snapshot.append({
+                "code": service.code,
+                "name": service.name,
+                "amount": str(service.amount),
+                "tax_amount": str(service.tax_amount),
+                "total_amount": str(service.total_amount),
+                "currency": service.currency,
+            })
+            expected_amount += service.amount
+            expected_tax += service.tax_amount
+
+        final_amount = Decimal(str(amount)) if amount is not None else expected_amount
+        final_tax = Decimal(str(tax_amount)) if tax_amount is not None else expected_tax
+        payment = OnboardingPayment.objects.create(
+            onboarding=onboarding,
+            status=status,
+            method=method,
+            currency=payment_currency,
+            amount=final_amount,
+            tax_amount=final_tax,
+            total_amount=final_amount + final_tax,
+            external_reference=external_reference,
+            paid_at=timezone.now() if status == OnboardingPayment.Status.SUCCESS else None,
+            recorded_by=performed_by,
+            service_snapshot=service_snapshot,
+            provider_payload=provider_payload or {},
+        )
+
+        self._log(
+            onboarding=onboarding,
+            activity_type=OnboardingActivityType.PAYMENT_RECORDED,
+            performed_by=performed_by,
+            description=f"Onboarding payment recorded as {status}.",
+            payload={"payment_id": str(payment.id), "status": status, "external_reference": external_reference},
+        )
+
+        if status == OnboardingPayment.Status.SUCCESS:
+            self.trigger_verification_checks(
+                onboarding=onboarding,
+                performed_by=performed_by,
+                trigger_mode=OnboardingVerificationCheck.TriggerMode.AUTO_AFTER_PAYMENT,
+            )
+        return payment
+
+    @transaction.atomic
+    def trigger_verification_checks(
+        self,
+        onboarding: OrganizationOnboarding,
+        performed_by: Optional[SystemUser],
+        trigger_mode: str = OnboardingVerificationCheck.TriggerMode.MANUAL,
+    ) -> list[OnboardingVerificationRun]:
+        checks = OnboardingVerificationCheck.objects.filter(
+            is_active=True,
+            trigger_mode=trigger_mode,
+        ).filter(models.Q(system__isnull=True) | models.Q(system=onboarding.system)).order_by("sort_order", "name")
+
+        runs = []
+        for check in checks:
+            run = OnboardingVerificationRun.objects.create(
+                onboarding=onboarding,
+                verification_check=check,
+                status=OnboardingVerificationRun.Status.TRIGGERED,
+                trigger_mode=trigger_mode,
+                request_payload=self._verification_request_payload(onboarding, check),
+                triggered_by=performed_by,
+                triggered_at=timezone.now(),
+            )
+            runs.append(run)
+
+        if runs:
+            self._log(
+                onboarding=onboarding,
+                activity_type=OnboardingActivityType.VERIFICATION_TRIGGERED,
+                performed_by=performed_by,
+                description=f"{len(runs)} onboarding verification check(s) triggered.",
+                payload={"run_ids": [str(run.id) for run in runs], "trigger_mode": trigger_mode},
+            )
+        return runs
+
+    @transaction.atomic
+    def update_verification_run(
+        self,
+        run: OnboardingVerificationRun,
+        *,
+        status: str,
+        external_reference: str = "",
+        response_payload: Optional[dict] = None,
+        result_summary: str = "",
+        error_message: str = "",
+    ) -> OnboardingVerificationRun:
+        if status not in OnboardingVerificationRun.Status.values:
+            raise OnboardingError("Invalid verification status.")
+        run.status = status
+        if external_reference:
+            run.external_reference = external_reference
+        run.response_payload = response_payload or {}
+        run.result_summary = result_summary
+        run.error_message = error_message
+        if status in (
+            OnboardingVerificationRun.Status.SUCCESS,
+            OnboardingVerificationRun.Status.FAILED,
+            OnboardingVerificationRun.Status.SKIPPED,
+        ):
+            run.completed_at = timezone.now()
+        run.save(update_fields=[
+            "status", "external_reference", "response_payload", "result_summary",
+            "error_message", "completed_at", "updated_at",
+        ])
+        self._log(
+            onboarding=run.onboarding,
+            activity_type=OnboardingActivityType.VERIFICATION_COMPLETED,
+            description=f"Verification check {run.verification_check.code} updated to {status}.",
+            payload={"run_id": str(run.id), "check_code": run.verification_check.code, "status": status},
+        )
+        return run
+
+    @staticmethod
+    def has_successful_payment(onboarding: OrganizationOnboarding) -> bool:
+        return onboarding.payments.filter(status=OnboardingPayment.Status.SUCCESS).exists()
 
     @transaction.atomic
     def remove_document(
@@ -859,9 +945,8 @@ class OnboardingService:
         return [
             OnboardingStatus.DRAFT,
             OnboardingStatus.SUBMITTED,
-            OnboardingStatus.DOCUMENTS_REQUESTED,
-            OnboardingStatus.UNDER_REVIEW,
             OnboardingStatus.APPROVED,
+            OnboardingStatus.VERIFIED,
         ]
 
     def _assert_country_can_onboard(
@@ -925,3 +1010,30 @@ class OnboardingService:
             document=document,
             payload=payload or {},
         )
+
+    @staticmethod
+    def _verification_request_payload(
+        onboarding: OrganizationOnboarding,
+        check: OnboardingVerificationCheck,
+    ) -> dict:
+        return {
+            "onboarding_id": str(onboarding.id),
+            "system_id": str(onboarding.system_id),
+            "check_code": check.code,
+            "integration_code": check.integration_code,
+            "legal_name": onboarding.legal_name,
+            "trading_name": onboarding.trading_name,
+            "organization_type": onboarding.organization_type,
+            "contact_email": onboarding.contact_email,
+            "contact_phone": onboarding.contact_phone,
+            "countries": [
+                {
+                    "country_code": country.country.code,
+                    "registration_number": country.registration_number,
+                    "tax_id": country.tax_id,
+                    "address": country.address,
+                }
+                for country in onboarding.country_requests.select_related("country")
+            ],
+            "metadata": onboarding.metadata,
+        }

@@ -9,7 +9,11 @@ from .models import (
     OrganizationOnboardingCountry,
     OnboardingDocument,
     OnboardingActivity,
-    DocumentRequest,
+    OnboardingServiceProduct,
+    OnboardingServiceSelection,
+    OnboardingPayment,
+    OnboardingVerificationCheck,
+    OnboardingVerificationRun,
 )
 
 
@@ -172,12 +176,27 @@ class OnboardingCountryInline(admin.TabularInline):
     ordering = ("created_at",)
 
 
-class DocumentRequestInline(admin.TabularInline):
-    model = DocumentRequest
+class OnboardingServiceSelectionInline(admin.TabularInline):
+    model = OnboardingServiceSelection
     extra = 0
-    autocomplete_fields = ("requested_by", "fulfilled_by_document")
-    readonly_fields = ("requested_at",)
-    ordering = ("-requested_at",)
+    autocomplete_fields = ("service", "selected_by")
+    ordering = ("service__sort_order",)
+
+
+class OnboardingPaymentInline(admin.TabularInline):
+    model = OnboardingPayment
+    extra = 0
+    autocomplete_fields = ("recorded_by",)
+    readonly_fields = ("paid_at",)
+    ordering = ("-created_at",)
+
+
+class OnboardingVerificationRunInline(admin.TabularInline):
+    model = OnboardingVerificationRun
+    extra = 0
+    autocomplete_fields = ("verification_check", "triggered_by")
+    readonly_fields = ("triggered_at", "completed_at")
+    ordering = ("-created_at",)
 
 
 @admin.register(OrganizationOnboarding)
@@ -203,9 +222,11 @@ class OrganizationOnboardingAdmin(admin.ModelAdmin):
 
     inlines = (
         OnboardingCountryInline,
+        OnboardingServiceSelectionInline,
+        OnboardingPaymentInline,
+        OnboardingVerificationRunInline,
         OnboardingDocumentInline,
         OnboardingActivityInline,
-        DocumentRequestInline,
     )
 
     fieldsets = (
@@ -257,7 +278,9 @@ class OrganizationOnboardingAdmin(admin.ModelAdmin):
                 "country_requests",
                 "documents",
                 "activities",
-                "document_requests",
+                "service_selections",
+                "payments",
+                "verification_runs",
             )
         )
 
@@ -373,48 +396,41 @@ class OnboardingActivityAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related("onboarding", "performed_by", "document")
 
 
-@admin.register(DocumentRequest)
-class DocumentRequestAdmin(admin.ModelAdmin):
-    list_display = (
-        "document_type",
-        "onboarding",
-        "requested_by",
-        "fulfilled_at",
-        "is_fulfilled",
-    )
-    list_filter = ("document_type",)
-    search_fields = ("reason",)
-    ordering = ("-requested_at",)
-    autocomplete_fields = (
-        "onboarding",
-        "requested_by",
-        "fulfilled_by_document",
-    )
+@admin.register(OnboardingServiceProduct)
+class OnboardingServiceProductAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "system", "amount", "tax_amount", "currency", "is_active", "sort_order")
+    list_filter = ("system", "currency", "is_active")
+    search_fields = ("name", "code", "description")
+    ordering = ("sort_order", "name")
+    autocomplete_fields = ("system",)
+    readonly_fields = ("created_at", "updated_at")
 
-    fieldsets = (
-        ("Request Details", {
-            "fields": (
-                "onboarding",
-                "document_type",
-                "label",
-                "reason",
-                "requested_by",
-                "requested_at",
-            )
-        }),
-        ("Fulfillment", {
-            "fields": ("fulfilled_by_document", "fulfilled_at", "deadline")
-        }),
-        ("Audit", {
-            "fields": ("created_at", "updated_at")
-        }),
-    )
 
-    readonly_fields = ("created_at", "updated_at", "requested_at")
+@admin.register(OnboardingPayment)
+class OnboardingPaymentAdmin(admin.ModelAdmin):
+    list_display = ("onboarding", "status", "method", "total_amount", "currency", "external_reference", "paid_at")
+    list_filter = ("status", "method", "currency")
+    search_fields = ("onboarding__legal_name", "external_reference")
+    ordering = ("-created_at",)
+    autocomplete_fields = ("onboarding", "recorded_by")
+    readonly_fields = ("created_at", "updated_at", "paid_at")
 
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            "onboarding",
-            "requested_by",
-            "fulfilled_by_document",
-        )
+
+@admin.register(OnboardingVerificationCheck)
+class OnboardingVerificationCheckAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "system", "trigger_mode", "required_for_onboarding", "is_active", "sort_order")
+    list_filter = ("system", "trigger_mode", "required_for_onboarding", "is_active")
+    search_fields = ("name", "code", "integration_code")
+    ordering = ("sort_order", "name")
+    autocomplete_fields = ("system",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(OnboardingVerificationRun)
+class OnboardingVerificationRunAdmin(admin.ModelAdmin):
+    list_display = ("onboarding", "verification_check", "status", "trigger_mode", "external_reference", "triggered_at", "completed_at")
+    list_filter = ("status", "trigger_mode", "verification_check")
+    search_fields = ("onboarding__legal_name", "verification_check__code", "external_reference")
+    ordering = ("-created_at",)
+    autocomplete_fields = ("onboarding", "verification_check", "triggered_by")
+    readonly_fields = ("created_at", "updated_at", "triggered_at", "completed_at")

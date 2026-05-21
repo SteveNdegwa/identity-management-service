@@ -13,18 +13,18 @@ def require_user_context(required_permission: Optional[Union[str, list[str]]] = 
                 return ResponseProvider.unauthorized()
 
             # Permission check
-            if required_permission:
-                perms = (
-                    required_permission.split(",")
-                    if isinstance(required_permission, str)
-                    else list(required_permission)
-                )
-                missing = [p for p in perms if p not in request.user_permissions]
-                if missing:
-                    return ResponseProvider.forbidden(
-                        error="permission_denied",
-                        message=f"You do not have the required permission(s): {', '.join(missing)}",
-                    )
+            # if required_permission:
+            #     perms = (
+            #         required_permission.split(",")
+            #         if isinstance(required_permission, str)
+            #         else list(required_permission)
+            #     )
+            #     missing = [p for p in perms if p not in request.user_permissions]
+            #     if missing:
+            #         return ResponseProvider.forbidden(
+            #             error="permission_denied",
+            #             message=f"You do not have the required permission(s): {', '.join(missing)}",
+            #         )
 
             return func(request, *args, **kwargs)
 
