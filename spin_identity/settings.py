@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 from corsheaders.defaults import default_headers
@@ -25,9 +26,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-5^@b+7%p-cmdjazo5h1@)ld!d!p4_=czm@0+3jmh(*&!8x7$g5'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', '0').lower() in ('1', 'true', 'yes', 'on')
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -53,12 +54,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'spin_identity.healthz.HealthCheckMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    "corsheaders.middleware.CorsMiddleware",
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'api.middleware.gateway.GatewayControlMiddleware',
+    # 'api.middleware.gateway.GatewayControlMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -96,11 +98,24 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DATABASE_DB'),
+        'USER': os.environ.get('DATABASE_USER'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD'),
+        'HOST': os.environ.get('DATABASE_HOST'),
+        'PORT': os.environ.get('DATABASE_PORT'),
+        'OPTIONS': {
+            'application_name': 'taswira-api',
+            'connect_timeout': 10,
+            'options': (
+                '-c statement_timeout=300000 '
+                '-c lock_timeout=75000 '
+                '-c idle_in_transaction_session_timeout=60000 '
+                '-c work_mem=32MB'
+            ),  # 5 minute query timeout, 75 second lock timeout, 1 minute idle in transaction timeout, 32MB work memory per query
+        },
+    },
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -136,9 +151,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+APP_PATH = os.environ.get('APP_PATH') or '/var/www/idms'
+STATIC_URL = '/static/'
+STATIC_ROOT = APP_PATH + '/static'
+STATICFILES_DIRS = []
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -150,73 +166,69 @@ AUTHENTICATION_BACKENDS = [
 ]
 SILENCED_SYSTEM_CHECKS = ['auth.W004']
 
-ONBOARDING_DOCUMENTS_USE_LOCAL_STORAGE = True
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+
+AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', '')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', '')
+
+_DEFAULT_STORAGE_BACKEND = (
+    'storages.backends.s3boto3.S3Boto3Storage'
+    if AWS_STORAGE_BUCKET_NAME
+    else 'django.core.files.storage.FileSystemStorage'
+)
 
 STORAGES = {
-    "default": {
-        "BACKEND": (
-            "django.core.files.storage.FileSystemStorage"
-            if ONBOARDING_DOCUMENTS_USE_LOCAL_STORAGE
-            else "storages.backends.s3boto3.S3Boto3Storage"
-        ),
+    'default': {
+        'BACKEND': _DEFAULT_STORAGE_BACKEND,
     },
-    "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
     },
 }
-
-
-AWS_ACCESS_KEY_ID = ""
-AWS_SECRET_ACCESS_KEY = ""
-AWS_STORAGE_BUCKET_NAME = ""
-
-AWS_S3_ENDPOINT_URL = ""
-AWS_S3_REGION_NAME = ""
 
 AWS_QUERYSTRING_AUTH = False
 AWS_S3_FILE_OVERWRITE = False
 AWS_DEFAULT_ACL = None
 
-AWS_S3_SIGNATURE_VERSION = "s3v4"
+AWS_S3_SIGNATURE_VERSION = 's3v4'
 
-# SSO settings
-SSO_ISSUER = "https://accounts.spinmobile.co"
+# Logging
+_VALID_LOG_LEVELS = {'CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'NOTSET'}
+_LOG_LEVEL_RAW = os.environ.get('LOG_LEVEL', 'INFO').upper()
+LOG_LEVEL = _LOG_LEVEL_RAW if _LOG_LEVEL_RAW in _VALID_LOG_LEVELS else 'INFO'
 
-SSO_PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCsvg4QUPzkjAYf
-hCMe5X+IOzukesQj7Aq3lagkgC65a9jOLyyHSJOdgAwdYdpWNoycevZlpQFXnxkN
-oG0CpspT5qcW715NwKbiNtTfMBNMgkJNSce5Lb7qZ4w7vQpj5kVjDLnVJcE7BsmV
-LAEMSacf5Bq06ks8Nqe/qCBDhx/+weIAZR5drDAHrom1AXZ340wPESXYxhVxxZz3
-Yk/GyQwRPZ5fq95ZmccnqW9wrXq+5wMWUS09BEwBcZkVTfyJtXwXB5d3e7yE+6BN
-MHcPG+fDECH3ftICO1rhEvCLmglpx33n/D8k7yQSToCrhJmIjh2C1vOSoJAeNUmk
-pdmF/kWNAgMBAAECggEATKznzTJFrqTAqwiaFkLEQxIXvUCJA3DoqOiTA/CpzMAk
-MhEacMo0S7rkpb4jjhUUgPjLmf6OA/ioxDWrbXvfXzKIhFOnxld3O/4eqxrJ1jIT
-f/752iaGEcH4qyOUExfJQNgLPKNPjAXNQJuRs4SV3EAB4sAEuSuBdj8IYzD9cLSf
-+29S4MLy9qPfjqg5FORDvsX6x4RuzI8mmFHtMz4uzGeZq/iXOY3TQLqP4WRXINLc
-0U6y3fPlnORWAR07EE2+wzNlEM/gKwTSnIuiXqONem/mK5+GZ/dUg3mNFPmdaqvk
-di9fuIoUWw07nfs7aDfN5vJZt+NLq9AJnrAbNrb0OQKBgQDMZAkhoKlm+qQ66Ydw
-NG0CGlvdCCRTyyigibconMKTRyjcxMpiSi6OSzdXefB3r4N6U4eBzC462hFzh4PN
-GN/dL66E+ofe7RrfpU1OXNCm3tLqP+YKj49q6ELC6UDZuOASvbaNfO++BKZM052B
-J5IC2W2B1yVs2GXIHcbcKCZSQwKBgQDYXD8jH9bo29bgk1U016WX89AcklU1eKic
-H3J3QQRcAd8OauY+a/0NnJeu2o7S0wleqKw9cv6NVhsA/Bli36hyxVMe8o0a3tos
-V27dNI5qiNhO777HRsK1Ud8UvgunBS52SbnSvvxYizSUIBM5phLp1MuGukr4Dbhd
-wZJAjumT7wKBgCFEawQRLWF4jECWgBfwQInmFmushpUo7QzsPWab1UO5glokobhL
-0LYSYgiX7V7dr226qMSkoiWsFskSFo7MbKuItkQorvLG7ufV9PY7Py7Z98Ru8Bdp
-9HL3KN6mroqBf98tB8iRvEfWY+b/TpSWBzr1ftByX0IPGsnups5wroQXAoGBANBH
-VRxJ/UeiweLk0gSRh76UngWzNMXJxn6sozN76mdsAb9OVyFGMY+V7EsN6Km5MG7o
-bw6kkbmbZ1l2VjXhWrZJkK/dDMsONvayoG3fty2FWL38eyo4yx1jmB3OqUb6bPTA
-GltvMVtHfrENg5RedByXlem3ko3iH1ZaDqGJMgAPAoGAKmoHY/4bLBI7RMaV2fCg
-Dw/LcMYgybrqEzAnO/CFJPz1jfwZZP8vk5CpjECZjHdfg78cdfgjqHAMldreQ4Wj
-HJdNdH5q98HaG7oDiOFoudFTq1mXKu/DfvxSv9NQ8o+2r3vr07fF4XuWhGqHqyZx
-bilIfPaBJ4XuFNlb3lG/xjk=
------END PRIVATE KEY-----"""
-
-SSO_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArL4OEFD85IwGH4QjHuV/
-iDs7pHrEI+wKt5WoJIAuuWvYzi8sh0iTnYAMHWHaVjaMnHr2ZaUBV58ZDaBtAqbK
-U+anFu9eTcCm4jbU3zATTIJCTUnHuS2+6meMO70KY+ZFYwy51SXBOwbJlSwBDEmn
-H+QatOpLPDanv6ggQ4cf/sHiAGUeXawwB66JtQF2d+NMDxEl2MYVccWc92JPxskM
-ET2eX6veWZnHJ6lvcK16vucDFlEtPQRMAXGZFU38ibV8FweXd3u8hPugTTB3Dxvn
-wxAh937SAjta4RLwi5oJacd95/w/JO8kEk6Aq4SZiI4dgtbzkqCQHjVJpKXZhf5F
-jQIDAQAB
------END PUBLIC KEY-----"""
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',
+            'formatter': 'standard',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        'django': {'level': LOG_LEVEL},
+        'django.request': {'level': 'WARNING'},
+        'accounts': {'level': LOG_LEVEL},
+        'api': {'level': LOG_LEVEL},
+        'audit': {'level': LOG_LEVEL},
+        'base': {'level': LOG_LEVEL},
+        'notifications': {'level': LOG_LEVEL},
+        'organizations': {'level': LOG_LEVEL},
+        'permissions': {'level': LOG_LEVEL},
+        'sso': {'level': LOG_LEVEL},
+        'systems': {'level': LOG_LEVEL},
+    },
+}
