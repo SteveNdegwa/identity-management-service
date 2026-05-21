@@ -1,6 +1,6 @@
 import secrets
 from datetime import timedelta
-from typing import Optional, Tuple
+from typing import Optional
 
 import bcrypt
 from django.db import transaction
@@ -90,9 +90,9 @@ class AccountService:
     def invite(
             self,
             system_user: SystemUser,
-            invited_by: Optional[SystemUser] = None,
+            invited_by: SystemUser | None = None,
             ttl_hours: int = 72,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         if system_user.status == SystemUserStatus.SUSPENDED:
             raise SystemUserStatusError("User is suspended in this system.")
         if system_user.status == SystemUserStatus.ACTIVE:
@@ -131,14 +131,14 @@ class AccountService:
             self,
             provisioned_by: SystemUser,
             system: System,
-            country: Optional[Country],
+            country: Country | None,
             role: Role,
             provisioning_email: str = "",
-            organization: Optional[Organization] = None,
+            organization: Organization | None = None,
             all_branches: bool = True,
-            branch_grants: Optional[list[Branch]] = None,
+            branch_grants: list[Branch] | None = None,
             external_ref: str = "",
-            metadata: Optional[dict] = None,
+            metadata: dict | None = None,
     ) -> SystemUser:
         if not provisioning_email:
             raise ProvisionSystemUserError("Provisioning email is required.")
@@ -231,18 +231,18 @@ class AccountService:
             lookup_id: str,
             token: str,
             claim_action: str,
-            password: Optional[str] = None,
-            pin: Optional[str] = None,
-            phone_number: Optional[str] = None,
+            password: str | None = None,
+            pin: str | None = None,
+            phone_number: str | None = None,
             first_name: str = "",
             last_name: str = "",
             middle_name: str = "",
             display_name: str = "",
             date_of_birth=None,
             gender: str = Gender.OTHER,
-            country: Optional[Country] = None,
-            email_verification_id: Optional[str] = None,
-            phone_verification_id: Optional[str] = None,
+            country: Country | None = None,
+            email_verification_id: str | None = None,
+            phone_verification_id: str | None = None,
             confirm_link_existing_user: bool = False,
             update_email: bool = False,
             ip_address: str = "",
@@ -356,7 +356,7 @@ class AccountService:
             primary_country: Optional[Country] = None,
             referral_code: Optional[str] = None,
             ip_address: str = "",
-    ) -> Tuple[User, SystemUser]:
+    ) -> tuple[User, SystemUser]:
         if not system.registration_open:
             raise RegistrationClosedError("This system does not allow self-registration.")
 
@@ -430,7 +430,7 @@ class AccountService:
             primary_country: Optional[Country] = None,
             referral_code: Optional[str] = None,
             ip_address: str = "",
-    ) -> Tuple[User, SystemUser]:
+    ) -> tuple[User, SystemUser]:
         if existing_user.realm_id and existing_user.realm_id != system.realm_id:
             raise SelfRegistrationError("User realm and system realm do not match.")
 
@@ -481,7 +481,7 @@ class AccountService:
             primary_country: Optional[Country] = None,
             referral_code: Optional[str] = None,
             ip_address: str = "",
-    ) -> Tuple[User, SystemUser]:
+    ) -> tuple[User, SystemUser]:
         if not system.registration_open:
             raise RegistrationClosedError("This system does not allow self-registration.")
 
@@ -603,7 +603,7 @@ class AccountService:
             primary_country: Optional[Country] = None,
             referral_code: Optional[str] = None,
             ip_address: str = "",
-    ) -> Tuple[User, SystemUser]:
+    ) -> tuple[User, SystemUser]:
         provider = self._validate_social_provider_for_system(system, provider)
         uid = (uid or "").strip()
         if not uid:
@@ -807,7 +807,7 @@ class AccountService:
             system: System,
             password: Optional[str],
             pin: Optional[str]
-    ) -> Tuple[Optional[str], Optional[str]]:
+    ) -> tuple[Optional[str], Optional[str]]:
         if system.passwordless_only:
             return None, None
 
@@ -914,7 +914,7 @@ class AccountService:
         #     raise SelfRegistrationError("Gender is required.")
 
     @staticmethod
-    def _require_email_and_phone(email: Optional[str], phone_number: Optional[str]) -> Tuple[str, str]:
+    def _require_email_and_phone(email: Optional[str], phone_number: Optional[str]) -> tuple[str, str]:
         email = (email or "").strip().lower()
         phone_number = (phone_number or "").strip()
         if not email:
@@ -928,7 +928,7 @@ class AccountService:
             realm: Realm,
             email: str,
             phone_number: str
-    ) -> Tuple[Optional[User], Optional[str]]:
+    ) -> tuple[Optional[User], Optional[str]]:
         try:
             return (
                 User.objects.get_by_identifier(realm, email, IdentifierType.EMAIL),
