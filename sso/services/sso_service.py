@@ -5,7 +5,7 @@ import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta, datetime
-from typing import Optional, Tuple, List
+from typing import List
 
 import bcrypt
 import jwt
@@ -54,7 +54,7 @@ MAX_OTP_ATTEMPTS = 3
 class LoginContext:
     system_user_id: str
     system_name: str
-    organization_name: Optional[str]
+    organization_name: str | None
     country_code: str
     country_name: str
     role_name: str
@@ -1108,9 +1108,9 @@ class SSOService:
 
     @staticmethod
     def _get_system_access(
-            session: Optional[SSOSession],
+            session: SSOSession | None,
             system: System
-    ) -> Optional[SSOSessionSystemAccess]:
+    ) -> SSOSessionSystemAccess | None:
         if not session:
             return None
         try:
@@ -1383,7 +1383,7 @@ class SSOService:
             system_user: SystemUser,
             scopes: list,
             nonce: str = "",
-            ts: Optional[TokenSet] = None,
+            ts: TokenSet | None = None,
     ) -> TokenResponse:
         now = timezone.now()
         perm_ctx = self._perm.resolve(system_user)
@@ -1594,8 +1594,8 @@ class SSOService:
     @staticmethod
     def _resolve_user_and_contact_silent(
             value: str,
-            identifier_type: Optional[str] = None
-    ) -> Tuple[Optional[User], Optional[str]]:
+            identifier_type: str | None = None
+    ) -> tuple[User | None, str | None]:
         # noinspection PyBroadException
         try:
             detected = identifier_type or detect_identifier_type(value)
@@ -1654,10 +1654,10 @@ class SSOService:
     @staticmethod
     def _audit(
             event_type: str,
-            user: Optional[User] = None,
+            user: User | None = None,
             ip: str = "",
-            system: Optional[System] = None,
-            payload: Optional[dict] = None,
+            system: System | None = None,
+            payload: dict | None = None,
             outcome: str = "success",
     ) -> None:
         AuditLog.objects.create(
