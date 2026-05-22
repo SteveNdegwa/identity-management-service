@@ -232,3 +232,6 @@ LOGGING = {
         'systems': {'level': LOG_LEVEL},
     },
 }
+
+NOTIFY_BASE_URL = 'https://stage-notify.spinmobile.co'
+NOTIFY_API_KEY = 'cc8bP6j7ChpyEet2MHUACqDuPDTZkph42MwU3JJTYjAOVVncK-x6IA'
