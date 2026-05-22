@@ -115,7 +115,7 @@ class IdentifierVerificationService:
             raw_code = generate_otp()
             verification.code_hash = hashlib.sha256(raw_code.encode()).hexdigest()
             verification.save()
-            NotificationService.deliver_otp_to_value(
+            NotificationService.deliver_otp(
                 identifier_type=identifier_type,
                 value=value,
                 raw_code=raw_code,
