@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/usr/src/app/.venv
+    UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /usr/src/app
 
@@ -30,7 +30,7 @@ FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH="/usr/src/app/.venv/bin:${PATH}"
+    PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /usr/src/app
 
@@ -38,6 +38,9 @@ RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
+# venv lives outside /usr/src/app so a dev bind-mount of the source tree can't
+# shadow it (see compose.yml); copy it separately from the application code.
+COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /usr/src/app /usr/src/app
 
 RUN mkdir -p /var/www/idms

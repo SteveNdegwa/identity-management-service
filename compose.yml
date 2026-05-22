@@ -17,9 +17,9 @@ services:
       - DATABASE_HOST=db
       - DATABASE_PORT=5432
     volumes:
+      # Source is bind-mounted for hot reload. The venv lives at /opt/venv
+      # (see Dockerfile), outside this path, so it is never shadowed.
       - .:/usr/src/app
-      # Mask the host .venv (built for macOS) so the image's Linux .venv wins.
-      - /usr/src/app/.venv
     depends_on:
       db:
         condition: service_healthy
