@@ -102,10 +102,6 @@ class System(BaseModel):
             old = System.objects.get(pk=self.pk)
             if old.realm_id != self.realm_id:
                 raise ValidationError('System realm cannot be changed after creation.')
-        if self.registration_open and not self.default_role:
-            raise ValidationError(
-                'Referrals can only be enabled for systems that allow self-registration.'
-            )
         self.allowed_social_providers = normalize_social_provider_list(
             self.allowed_social_providers
         )
