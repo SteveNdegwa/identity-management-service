@@ -35,13 +35,13 @@ class SystemAdminService:
         try:
             return normalize_social_provider_list(providers)
         except ValidationError as exc:
-            raise SystemAdminServiceError(exc.messages[0])
+            raise SystemAdminServiceError(exc.messages[0]) from exc
 
     @staticmethod
     def _validate_referral_settings(*, allows_referrals: bool, registration_open: bool) -> None:
         if allows_referrals and not registration_open:
             raise SystemAdminServiceError(
-                "Referrals can only be enabled for systems that allow self-registration."
+                'Referrals can only be enabled for systems that allow self-registration.'
             )
 
     @transaction.atomic
@@ -55,16 +55,16 @@ class SystemAdminService:
         performed_by: SystemUser | None = None,
         **kwargs,
     ) -> System:
-        clean_name = (name or "").strip()
+        clean_name = (name or '').strip()
         if not clean_name:
-            raise SystemAdminServiceError("System name is required.")
+            raise SystemAdminServiceError('System name is required.')
 
         self._validate_referral_settings(
-            allows_referrals=kwargs.get("allows_referrals", False),
-            registration_open=kwargs.get("registration_open", True),
+            allows_referrals=kwargs.get('allows_referrals', False),
+            registration_open=kwargs.get('registration_open', True),
         )
-        kwargs["allowed_social_providers"] = self._normalize_social_providers(
-            kwargs.get("allowed_social_providers", [])
+        kwargs['allowed_social_providers'] = self._normalize_social_providers(
+            kwargs.get('allowed_social_providers', [])
         )
 
         final_slug = self._unique_slug(slug or clean_name)
@@ -83,9 +83,9 @@ class SystemAdminService:
             actor_system_user=performed_by,
             subject=system,
             payload={
-                "name": system.name,
-                "slug": system.slug,
-                "country_codes": [country.code for country in countries or []],
+                'name': system.name,
+                'slug': system.slug,
+                'country_codes': [country.code for country in countries or []],
             },
         )
         return system
@@ -111,7 +111,7 @@ class SystemAdminService:
         auto_login_after_registration: bool | None = None,
         requires_approval: bool | None = None,
         allows_referrals: bool | None = None,
-        referral_reward_amount = None,
+        referral_reward_amount=None,
         auto_verify_referrals: bool | None = None,
         mfa_required: bool | None = None,
         mfa_required_enforced: bool | None = None,
@@ -122,70 +122,72 @@ class SystemAdminService:
         if name is not None:
             clean_name = name.strip()
             if not clean_name:
-                raise SystemAdminServiceError("System name cannot be blank.")
+                raise SystemAdminServiceError('System name cannot be blank.')
             if clean_name != system.name:
                 system.slug = self._unique_slug(clean_name, exclude_id=system.id)
-                updated.append("slug")
+                updated.append('slug')
             system.name = clean_name
-            updated.append("name")
+            updated.append('name')
 
         if description is not None:
             system.description = description
-            updated.append("description")
+            updated.append('description')
         if logo_url is not None:
             system.logo_url = logo_url
-            updated.append("logo_url")
+            updated.append('logo_url')
         if website is not None:
             system.website = website
-            updated.append("website")
+            updated.append('website')
         if password_type is not None:
             system.password_type = password_type
-            updated.append("password_type")
+            updated.append('password_type')
         if allow_password_login is not None:
             system.allow_password_login = allow_password_login
-            updated.append("allow_password_login")
+            updated.append('allow_password_login')
         if allow_passwordless_login is not None:
             system.allow_passwordless_login = allow_passwordless_login
-            updated.append("allow_passwordless_login")
+            updated.append('allow_passwordless_login')
         if allow_magic_link_login is not None:
             system.allow_magic_link_login = allow_magic_link_login
-            updated.append("allow_magic_link_login")
+            updated.append('allow_magic_link_login')
         if allow_social_login is not None:
             system.allow_social_login = allow_social_login
-            updated.append("allow_social_login")
+            updated.append('allow_social_login')
         if passwordless_only is not None:
             system.passwordless_only = passwordless_only
-            updated.append("passwordless_only")
+            updated.append('passwordless_only')
         if allowed_social_providers is not None:
-            system.allowed_social_providers = self._normalize_social_providers(allowed_social_providers)
-            updated.append("allowed_social_providers")
+            system.allowed_social_providers = self._normalize_social_providers(
+                allowed_social_providers
+            )
+            updated.append('allowed_social_providers')
         if registration_open is not None:
             system.registration_open = registration_open
-            updated.append("registration_open")
+            updated.append('registration_open')
         if auto_login_after_registration is not None:
             system.auto_login_after_registration = auto_login_after_registration
-            updated.append("auto_login_after_registration")
+            updated.append('auto_login_after_registration')
         if requires_approval is not None:
             system.requires_approval = requires_approval
-            updated.append("requires_approval")
+            updated.append('requires_approval')
         if allows_referrals is not None:
             system.allows_referrals = allows_referrals
-            updated.append("allows_referrals")
+            updated.append('allows_referrals')
         if referral_reward_amount is not None:
             system.referral_reward_amount = referral_reward_amount
-            updated.append("referral_reward_amount")
+            updated.append('referral_reward_amount')
         if auto_verify_referrals is not None:
             system.auto_verify_referrals = auto_verify_referrals
-            updated.append("auto_verify_referrals")
+            updated.append('auto_verify_referrals')
         if mfa_required is not None:
             system.mfa_required = mfa_required
-            updated.append("mfa_required")
+            updated.append('mfa_required')
         if mfa_required_enforced is not None:
             system.mfa_required_enforced = mfa_required_enforced
-            updated.append("mfa_required_enforced")
+            updated.append('mfa_required_enforced')
         if allowed_mfa_methods is not None:
             system.allowed_mfa_methods = allowed_mfa_methods
-            updated.append("allowed_mfa_methods")
+            updated.append('allowed_mfa_methods')
 
         if updated:
             self._validate_referral_settings(
@@ -195,12 +197,13 @@ class SystemAdminService:
             system.save(update_fields=updated)
             if system.referrals_enabled:
                 from accounts.services.referral_service import ReferralService
+
                 ReferralService().ensure_system_referral_codes(system)
             self._audit(
                 AuditEventType.SYSTEM_SETTINGS_CHANGED,
                 actor_system_user=performed_by,
                 subject=system,
-                payload={"action": "updated", "updated_fields": updated},
+                payload={'action': 'updated', 'updated_fields': updated},
             )
 
         return system
@@ -213,16 +216,16 @@ class SystemAdminService:
         performed_by: SystemUser | None = None,
     ) -> System:
         if not system.is_active:
-            raise SystemAdminServiceError("System is already inactive.")
+            raise SystemAdminServiceError('System is already inactive.')
 
         system.is_active = False
-        system.save(update_fields=["is_active"])
+        system.save(update_fields=['is_active'])
 
         self._audit(
             AuditEventType.SYSTEM_SETTINGS_CHANGED,
             actor_system_user=performed_by,
             subject=system,
-            payload={"action": "deactivated"},
+            payload={'action': 'deactivated'},
         )
         return system
 
@@ -234,16 +237,16 @@ class SystemAdminService:
         performed_by: SystemUser | None = None,
     ) -> System:
         if system.is_active:
-            raise SystemAdminServiceError("System is already active.")
+            raise SystemAdminServiceError('System is already active.')
 
         system.is_active = True
-        system.save(update_fields=["is_active"])
+        system.save(update_fields=['is_active'])
 
         self._audit(
             AuditEventType.SYSTEM_SETTINGS_CHANGED,
             actor_system_user=performed_by,
             subject=system,
-            payload={"action": "reactivated"},
+            payload={'action': 'reactivated'},
         )
         return system
 
@@ -256,16 +259,14 @@ class SystemAdminService:
         performed_by: SystemUser | None = None,
     ) -> Country:
         if system.available_countries.filter(id=country.id).exists():
-            raise SystemAdminServiceError(
-                f"{country.name} is already available on {system.name}."
-            )
+            raise SystemAdminServiceError(f'{country.name} is already available on {system.name}.')
 
         system.available_countries.add(country)
         self._audit(
             AuditEventType.SYSTEM_SETTINGS_CHANGED,
             actor_system_user=performed_by,
             subject=system,
-            payload={"action": "country_added", "country_code": country.code},
+            payload={'action': 'country_added', 'country_code': country.code},
         )
         return country
 
@@ -278,16 +279,14 @@ class SystemAdminService:
         performed_by: SystemUser | None = None,
     ) -> Country:
         if not system.available_countries.filter(id=country.id).exists():
-            raise SystemAdminServiceError(
-                f"{country.name} is not configured on {system.name}."
-            )
+            raise SystemAdminServiceError(f'{country.name} is not configured on {system.name}.')
 
         system.available_countries.remove(country)
         self._audit(
             AuditEventType.SYSTEM_SETTINGS_CHANGED,
             actor_system_user=performed_by,
             subject=system,
-            payload={"action": "country_removed", "country_code": country.code},
+            payload={'action': 'country_removed', 'country_code': country.code},
         )
         return country
 
@@ -311,12 +310,12 @@ class SystemAdminService:
         override_allowed_social_providers=None,
         is_active: bool = True,
     ) -> tuple[SystemClient, str]:
-        clean_name = (name or "").strip()
+        clean_name = (name or '').strip()
         if not clean_name:
-            raise SystemAdminServiceError("Client name is required.")
+            raise SystemAdminServiceError('Client name is required.')
 
-        raw_secret = ""
-        secret_hash = ""
+        raw_secret = ''
+        secret_hash = ''
         if client_type != SystemClient.ClientType.PUBLIC:
             raw_secret = self.generate_client_secret()
             secret_hash = self.hash_client_secret(raw_secret)
@@ -334,7 +333,9 @@ class SystemAdminService:
             override_allow_passwordless_login=override_allow_passwordless_login,
             override_allow_magic_link_login=override_allow_magic_link_login,
             override_allow_social_login=override_allow_social_login,
-            override_allowed_social_providers=self._normalize_social_providers(override_allowed_social_providers),
+            override_allowed_social_providers=self._normalize_social_providers(
+                override_allowed_social_providers
+            ),
             client_secret_hash=secret_hash,
             is_active=is_active,
         )
@@ -344,10 +345,10 @@ class SystemAdminService:
             actor_system_user=performed_by,
             subject=client,
             payload={
-                "action": "client_created",
-                "system_id": str(system.id),
-                "client_name": client.name,
-                "client_type": client.client_type,
+                'action': 'client_created',
+                'system_id': str(system.id),
+                'client_name': client.name,
+                'client_type': client.client_type,
             },
         )
         return client, raw_secret
@@ -360,17 +361,17 @@ class SystemAdminService:
         performed_by: SystemUser | None = None,
     ) -> tuple[SystemClient, str]:
         if client.client_type == SystemClient.ClientType.PUBLIC:
-            raise SystemAdminServiceError("Public clients do not use client secrets.")
+            raise SystemAdminServiceError('Public clients do not use client secrets.')
 
         raw_secret = self.generate_client_secret()
         client.client_secret_hash = self.hash_client_secret(raw_secret)
-        client.save(update_fields=["client_secret_hash", "updated_at"])
+        client.save(update_fields=['client_secret_hash', 'updated_at'])
 
         self._audit(
             AuditEventType.SYSTEM_SETTINGS_CHANGED,
             actor_system_user=performed_by,
             subject=client,
-            payload={"action": "client_secret_regenerated"},
+            payload={'action': 'client_secret_regenerated'},
         )
         return client, raw_secret
 
@@ -398,44 +399,44 @@ class SystemAdminService:
         if name is not None:
             clean_name = name.strip()
             if not clean_name:
-                raise SystemAdminServiceError("Client name cannot be blank.")
+                raise SystemAdminServiceError('Client name cannot be blank.')
             client.name = clean_name
-            updated.append("name")
+            updated.append('name')
         if client_type is not None:
             client.client_type = client_type
-            updated.append("client_type")
+            updated.append('client_type')
         if redirect_uris is not None:
             client.redirect_uris = redirect_uris
-            updated.append("redirect_uris")
+            updated.append('redirect_uris')
         if logout_uris is not None:
             client.logout_uris = logout_uris
-            updated.append("logout_uris")
+            updated.append('logout_uris')
         if allowed_scopes is not None:
             client.allowed_scopes = allowed_scopes
-            updated.append("allowed_scopes")
+            updated.append('allowed_scopes')
         if access_token_ttl is not None:
             client.access_token_ttl = access_token_ttl
-            updated.append("access_token_ttl")
+            updated.append('access_token_ttl')
         if refresh_token_ttl is not None:
             client.refresh_token_ttl = refresh_token_ttl
-            updated.append("refresh_token_ttl")
+            updated.append('refresh_token_ttl')
         if id_token_ttl is not None:
             client.id_token_ttl = id_token_ttl
-            updated.append("id_token_ttl")
+            updated.append('id_token_ttl')
         if override_allow_passwordless_login is not None:
             client.override_allow_passwordless_login = override_allow_passwordless_login
-            updated.append("override_allow_passwordless_login")
+            updated.append('override_allow_passwordless_login')
         if override_allow_magic_link_login is not None:
             client.override_allow_magic_link_login = override_allow_magic_link_login
-            updated.append("override_allow_magic_link_login")
+            updated.append('override_allow_magic_link_login')
         if override_allow_social_login is not None:
             client.override_allow_social_login = override_allow_social_login
-            updated.append("override_allow_social_login")
+            updated.append('override_allow_social_login')
         if override_allowed_social_providers is not None:
             client.override_allowed_social_providers = self._normalize_social_providers(
                 override_allowed_social_providers
             )
-            updated.append("override_allowed_social_providers")
+            updated.append('override_allowed_social_providers')
 
         if updated:
             client.save(update_fields=updated)
@@ -443,7 +444,7 @@ class SystemAdminService:
                 AuditEventType.SYSTEM_SETTINGS_CHANGED,
                 actor_system_user=performed_by,
                 subject=client,
-                payload={"action": "client_updated", "updated_fields": updated},
+                payload={'action': 'client_updated', 'updated_fields': updated},
             )
 
         return client
@@ -456,15 +457,15 @@ class SystemAdminService:
         performed_by: SystemUser | None = None,
     ) -> SystemClient:
         if not client.is_active:
-            raise SystemAdminServiceError("Client is already inactive.")
+            raise SystemAdminServiceError('Client is already inactive.')
 
         client.is_active = False
-        client.save(update_fields=["is_active"])
+        client.save(update_fields=['is_active'])
         self._audit(
             AuditEventType.SYSTEM_SETTINGS_CHANGED,
             actor_system_user=performed_by,
             subject=client,
-            payload={"action": "client_deactivated"},
+            payload={'action': 'client_deactivated'},
         )
         return client
 
@@ -476,15 +477,15 @@ class SystemAdminService:
         performed_by: SystemUser | None = None,
     ) -> SystemClient:
         if client.is_active:
-            raise SystemAdminServiceError("Client is already active.")
+            raise SystemAdminServiceError('Client is already active.')
 
         client.is_active = True
-        client.save(update_fields=["is_active"])
+        client.save(update_fields=['is_active'])
         self._audit(
             AuditEventType.SYSTEM_SETTINGS_CHANGED,
             actor_system_user=performed_by,
             subject=client,
-            payload={"action": "client_reactivated"},
+            payload={'action': 'client_reactivated'},
         )
         return client
 
@@ -497,34 +498,34 @@ class SystemAdminService:
         value: str,
         performed_by: SystemUser | None = None,
         value_type: str = SystemSettings.ValueType.STRING,
-        description: str = "",
+        description: str = '',
         is_secret: bool = False,
     ) -> SystemSettings:
-        clean_key = (key or "").strip()
+        clean_key = (key or '').strip()
         if not clean_key:
-            raise SystemAdminServiceError("Setting key is required.")
+            raise SystemAdminServiceError('Setting key is required.')
 
         setting, _ = SystemSettings.objects.update_or_create(
             system=system,
             key=clean_key,
             defaults={
-                "value": value,
-                "value_type": value_type,
-                "description": description,
-                "is_secret": is_secret,
+                'value': value,
+                'value_type': value_type,
+                'description': description,
+                'is_secret': is_secret,
             },
         )
         self._audit(
             AuditEventType.SYSTEM_SETTINGS_CHANGED,
             actor_system_user=performed_by,
             subject=setting,
-            payload={"system": system.name, "key": clean_key},
+            payload={'system': system.name, 'key': clean_key},
         )
         return setting
 
     @staticmethod
     def _unique_slug(raw_value: str, exclude_id=None) -> str:
-        base_slug = slugify(raw_value) or "system"
+        base_slug = slugify(raw_value) or 'system'
         candidate = base_slug
         suffix = 2
 
@@ -534,21 +535,29 @@ class SystemAdminService:
                 qs = qs.exclude(id=exclude_id)
             if not qs.exists():
                 return candidate
-            candidate = f"{base_slug}-{suffix}"
+            candidate = f'{base_slug}-{suffix}'
             suffix += 1
 
     @staticmethod
     def _audit(event_type, actor_system_user=None, subject=None, payload=None):
         is_system = isinstance(subject, System)
-        subject_system = getattr(subject, "system", None)
+        subject_system = getattr(subject, 'system', None)
         AuditLog.objects.create(
             event_type=event_type,
-            actor_user_id=actor_system_user.user_id if actor_system_user and actor_system_user.user_id else None,
+            actor_user_id=actor_system_user.user_id
+            if actor_system_user and actor_system_user.user_id
+            else None,
             actor_system_user_id=actor_system_user.id if actor_system_user else None,
-            subject_type=subject.__class__.__name__ if subject else "",
-            subject_id=str(subject.id) if subject else "",
-            subject_label=str(subject) if subject else "",
-            system_id=str(subject.id) if is_system and subject else getattr(subject, "system_id", None),
-            system_name=subject.name if is_system and subject else subject_system.name if subject_system else "",
+            subject_type=subject.__class__.__name__ if subject else '',
+            subject_id=str(subject.id) if subject else '',
+            subject_label=str(subject) if subject else '',
+            system_id=str(subject.id)
+            if is_system and subject
+            else getattr(subject, 'system_id', None),
+            system_name=subject.name
+            if is_system and subject
+            else subject_system.name
+            if subject_system
+            else '',
             payload=payload or {},
         )

@@ -8,10 +8,7 @@ import bcrypt
 
 logger = logging.getLogger(__name__)
 
-DUMMY_BCRYPT_HASH = bcrypt.hashpw(
-    b"dummy-password",
-    bcrypt.gensalt()
-)
+DUMMY_BCRYPT_HASH = bcrypt.hashpw(b'dummy-password', bcrypt.gensalt())
 
 
 def hash_value(value: str) -> str:
@@ -19,20 +16,20 @@ def hash_value(value: str) -> str:
 
 
 def mask(value: str) -> str:
-    if "@" in value:
-        local, _, domain = value.partition("@")
-        return f"{local[0]}{'*' * max(1, len(local) - 2)}{local[-1]}@{domain}"
+    if '@' in value:
+        local, _, domain = value.partition('@')
+        return f'{local[0]}{"*" * max(1, len(local) - 2)}{local[-1]}@{domain}'
     if len(value) > 4:
-        return value[:2] + "*" * (len(value) - 4) + value[-2:]
-    return "****"
+        return value[:2] + '*' * (len(value) - 4) + value[-2:]
+    return '****'
 
 
 def generate_otp() -> str:
-    return f"{random.SystemRandom().randint(0, 999999):06d}"
+    return f'{random.SystemRandom().randint(0, 999999):06d}'
 
 
 def dummy_bcrypt():
-    bcrypt.checkpw(b"dummy", DUMMY_BCRYPT_HASH)
+    bcrypt.checkpw(b'dummy', DUMMY_BCRYPT_HASH)
 
 
 def get_client_ip(request):
@@ -43,19 +40,20 @@ def get_client_ip(request):
 
 
 def sanitize_data(data: dict | None) -> dict | None:
-    sensitive_keys = {"password", "old_password", "new_password"}
+    sensitive_keys = {'password', 'old_password', 'new_password'}
     if data is None:
         return None
+
     def _sanitize(obj: Any) -> Any:
         if isinstance(obj, dict):
             return {
-                k: ("****" if k.lower() in sensitive_keys else _sanitize(v))
-                for k, v in obj.items()
+                k: ('****' if k.lower() in sensitive_keys else _sanitize(v)) for k, v in obj.items()
             }
         elif isinstance(obj, list):
             return [_sanitize(item) for item in obj]
         else:
             return obj
+
     return _sanitize(data)
 
 
@@ -66,7 +64,7 @@ def parse_form_value(value: Any) -> Any:
     clean_value = value.strip()
     if not clean_value:
         return value
-    if clean_value[0] not in "[{":
+    if clean_value[0] not in '[{':
         return value
 
     try:
@@ -82,7 +80,7 @@ def parse_form_data(data: dict) -> dict:
 def get_request_data(request) -> dict:
     try:
         if request is None:
-            return {"data": {}, "files": {}}
+            return {'data': {}, 'files': {}}
 
         method = request.method
         content_type = request.META.get('CONTENT_TYPE', '')
@@ -96,8 +94,10 @@ def get_request_data(request) -> dict:
             except json.JSONDecodeError:
                 data = {}
 
-        elif 'multipart/form-data' in content_type or \
-                'application/x-www-form-urlencoded' in content_type:
+        elif (
+            'multipart/form-data' in content_type
+            or 'application/x-www-form-urlencoded' in content_type
+        ):
             data = parse_form_data(request.POST.dict())
 
         else:

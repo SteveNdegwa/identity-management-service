@@ -19,7 +19,7 @@ class RealmModelBackend(ModelBackend):
                 realm=realm,
                 **{UserModel.USERNAME_FIELD: login_value},
             )
-        except UserModel.DoesNotExist, UserModel.MultipleObjectsReturned:
+        except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned) as _exc:
             UserModel().set_password(password)
             return None
 

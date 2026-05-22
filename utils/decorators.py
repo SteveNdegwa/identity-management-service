@@ -1,11 +1,10 @@
 import functools
-from typing import Union
 
 from utils.extended_request import ExtendedRequest
 from utils.response_provider import ResponseProvider
 
 
-def require_user_context(required_permission: Union[str, list[str]] | None = None):
+def require_user_context(required_permission: str | list[str] | None = None):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(request: ExtendedRequest, *args, **kwargs):
@@ -43,15 +42,15 @@ def require_active_session(func):
         sso_session = request.sso_session
         if not request.is_authenticated or not sso_session:
             return ResponseProvider.unauthorized(
-                error="invalid_session",
-                message="Your session is invalid, expired, or has been revoked. Please authenticate again."
+                error='invalid_session',
+                message='Your session is invalid, expired, or has been revoked. Please authenticate again.',
             )
         if sso_session.requires_reauth:
             return ResponseProvider.unauthorized(
-                error="requires_reauth",
-                message=sso_session.reauth_reason
+                error='requires_reauth', message=sso_session.reauth_reason
             )
         return func(request, *args, **kwargs)
+
     return wrapper
 
 
