@@ -1,0 +1,28 @@
+# Local virtualenvs — must never be baked into the image; the image builds its
+# own venv at /opt/venv (see Dockerfile).
+.venv
+venv
+
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# VCS and CI
+.git
+.github
+.gitignore
+
+# Local env / editor / OS files
+.env
+.env.*
+.vscode
+.idea
+.DS_Store
+
+# Compose / docs not needed in the build context
+compose.yml
+README*

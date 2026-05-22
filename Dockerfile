@@ -30,6 +30,8 @@ FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /usr/src/app
