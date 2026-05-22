@@ -393,13 +393,6 @@ class OnboardingService:
             new_status=OnboardingStatus.SUBMITTED,
             payload={'organization_id': str(organization.id)},
         )
-        self._log(
-            onboarding=onboarding,
-            activity_type=OnboardingActivityType.SUBMITTED,
-            performed_by=contact_system_user,
-            description='Application submitted for review.',
-            new_status=OnboardingStatus.SUBMITTED,
-        )
         return onboarding
 
     @transaction.atomic
