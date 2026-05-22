@@ -86,11 +86,11 @@ TEMPLATES = [
 WSGI_APPLICATION = 'spin_identity.wsgi.application'
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    'http://localhost:3000',
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
-    "X-SSO-Session-Id",
+    'X-SSO-Session-Id',
 ]
 
 # Database

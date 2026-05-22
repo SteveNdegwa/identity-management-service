@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from django.core.exceptions import ValidationError
 
@@ -6,13 +6,13 @@ from django.core.exceptions import ValidationError
 def _country_lookup(value: str):
     from base.models import Country
 
-    clean_value = str(value or "").strip()
+    clean_value = str(value or '').strip()
     if not clean_value:
         return None
 
     try:
         return Country.objects.get(id=clean_value)
-    except (Country.DoesNotExist, ValidationError, ValueError):
+    except (Country.DoesNotExist, ValidationError, ValueError) as _exc:
         pass
 
     try:
@@ -21,12 +21,12 @@ def _country_lookup(value: str):
         return None
 
 
-def country_value_from_data(data: dict) -> Optional[str]:
-    return data.get("country_id") or data.get("country_code") or data.get("country")
+def country_value_from_data(data: dict) -> str | None:
+    return data.get('country_id') or data.get('country_code') or data.get('country')
 
 
 def has_country_value(data: dict) -> bool:
-    return country_value_from_data(data) not in (None, "")
+    return country_value_from_data(data) not in (None, '')
 
 
 def get_country_from_data(data: dict):

@@ -1,25 +1,24 @@
 import logging
-from typing import Optional
 
 from django.db import models
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST, require_http_methods, require_GET
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from base.models import Country
 from organizations.models import (
-    OrganizationOnboarding,
-    OrganizationOnboardingCountry,
-    OnboardingDocument,
-    DocumentType,
-    Organization,
-    OrganizationCountry,
     Branch,
-    OrganizationSettings,
+    DocumentType,
+    OnboardingDocument,
     OnboardingPayment,
     OnboardingServiceProduct,
     OnboardingStatus,
     OnboardingVerificationCheck,
     OnboardingVerificationRun,
+    Organization,
+    OrganizationCountry,
+    OrganizationOnboarding,
+    OrganizationOnboardingCountry,
+    OrganizationSettings,
 )
 from systems.models import System
 from utils.countries import get_country_from_data, has_country_value
@@ -27,7 +26,7 @@ from utils.decorators import require_user_context
 from utils.extended_request import ExtendedRequest
 from utils.response_provider import ResponseProvider
 
-from .services.onboarding_service import OnboardingService, OnboardingError
+from .services.onboarding_service import OnboardingError, OnboardingService
 from .services.organization_service import OrganizationService, OrganizationServiceError
 
 logger = logging.getLogger(__name__)
@@ -35,8 +34,8 @@ organization_service = OrganizationService()
 onboarding_service = OnboardingService()
 
 
-def _get_system(data: dict) -> Optional[System]:
-    sid = data.get("system_id") or data.get("system")
+def _get_system(data: dict) -> System | None:
+    sid = data.get('system_id') or data.get('system')
     if not sid:
         return None
     try:
@@ -45,75 +44,71 @@ def _get_system(data: dict) -> Optional[System]:
         return None
 
 
-def _get_organization(organization_id: str) -> Optional[Organization]:
+def _get_organization(organization_id: str) -> Organization | None:
     try:
-        return Organization.objects.select_related(
-            "system", "onboarding"
-        ).get(id=organization_id)
+        return Organization.objects.select_related('system', 'onboarding').get(id=organization_id)
     except Organization.DoesNotExist:
         return None
 
 
-def _get_organization_from_data(data: dict) -> Optional[Organization]:
-    organization_id = data.get("organization_id") or data.get("organization")
+def _get_organization_from_data(data: dict) -> Organization | None:
+    organization_id = data.get('organization_id') or data.get('organization')
     if not organization_id:
         return None
     return _get_organization(organization_id)
 
 
-def _get_org_country(org_country_id: str) -> Optional[OrganizationCountry]:
+def _get_org_country(org_country_id: str) -> OrganizationCountry | None:
     try:
         return OrganizationCountry.objects.select_related(
-            "organization", "country", "approved_by", "source_onboarding"
+            'organization', 'country', 'approved_by', 'source_onboarding'
         ).get(id=org_country_id)
     except OrganizationCountry.DoesNotExist:
         return None
 
 
-def _get_branch(branch_id: str) -> Optional[Branch]:
+def _get_branch(branch_id: str) -> Branch | None:
     try:
-        return Branch.objects.select_related(
-            "organization", "country", "parent"
-        ).get(id=branch_id)
+        return Branch.objects.select_related('organization', 'country', 'parent').get(id=branch_id)
     except Branch.DoesNotExist:
         return None
 
 
-def _get_country(data: dict) -> Optional[Country]:
+def _get_country(data: dict) -> Country | None:
     return get_country_from_data(data)
 
 
-def _get_onboarding(onboarding_id: str) -> Optional[OrganizationOnboarding]:
+def _get_onboarding(onboarding_id: str) -> OrganizationOnboarding | None:
     try:
         return OrganizationOnboarding.objects.select_related(
-            "system", "contact_system_user", "created_organization", "organization"
+            'system', 'contact_system_user', 'created_organization', 'organization'
         ).get(id=onboarding_id)
     except OrganizationOnboarding.DoesNotExist:
         return None
 
 
-def _get_document(document_id: str) -> Optional[OnboardingDocument]:
+def _get_document(document_id: str) -> OnboardingDocument | None:
     try:
-        return OnboardingDocument.objects.select_related(
-            "onboarding", "uploaded_by"
-        ).get(id=document_id)
+        return OnboardingDocument.objects.select_related('onboarding', 'uploaded_by').get(
+            id=document_id
+        )
     except OnboardingDocument.DoesNotExist:
         return None
 
 
-def _get_verification_run(run_id: str) -> Optional[OnboardingVerificationRun]:
+def _get_verification_run(run_id: str) -> OnboardingVerificationRun | None:
     try:
         return OnboardingVerificationRun.objects.select_related(
-            "onboarding", "verification_check", "triggered_by"
+            'onboarding', 'verification_check', 'triggered_by'
         ).get(id=run_id)
     except OnboardingVerificationRun.DoesNotExist:
         return None
 
 
-def _get_onboarding_country(country_request_id: str) -> Optional[OrganizationOnboardingCountry]:
+def _get_onboarding_country(country_request_id: str) -> OrganizationOnboardingCountry | None:
     try:
         return OrganizationOnboardingCountry.objects.select_related(
-            "onboarding", "onboarding__system", "onboarding__country", "country"
+            'onboarding', 'onboarding__system', 'onboarding__country', 'country'
         ).get(id=country_request_id)
     except OrganizationOnboardingCountry.DoesNotExist:
         return None
@@ -121,480 +116,458 @@ def _get_onboarding_country(country_request_id: str) -> Optional[OrganizationOnb
 
 def _organization_payload(org: Organization) -> dict:
     return {
-        "id": str(org.id),
-        "name": org.name,
-        "slug": org.slug,
-        "description": org.description,
-        "logo_url": org.logo_url,
-        "website": org.website,
-        "is_active": org.is_active,
-        "verified": org.verified,
-        "verified_at": org.verified_at.isoformat() if org.verified_at else None,
-        "system": org.system.name,
-        "created_at": org.created_at.isoformat(),
-        "countries": [
+        'id': str(org.id),
+        'name': org.name,
+        'slug': org.slug,
+        'description': org.description,
+        'logo_url': org.logo_url,
+        'website': org.website,
+        'is_active': org.is_active,
+        'verified': org.verified,
+        'verified_at': org.verified_at.isoformat() if org.verified_at else None,
+        'system': org.system.name,
+        'created_at': org.created_at.isoformat(),
+        'countries': [
             _org_country_payload(country)
-            for country in org.organization_countries.select_related("country").order_by("country__name")
+            for country in org.organization_countries.select_related('country').order_by(
+                'country__name'
+            )
         ],
     }
 
 
 def _org_country_payload(oc: OrganizationCountry) -> dict:
     return {
-        "id": str(oc.id),
-        "country_code": oc.country.code,
-        "country_name": oc.country.name,
-        "registration_number": oc.registration_number,
-        "tax_id": oc.tax_id,
-        "approval_status": oc.approval_status,
-        "approved_at": oc.approved_at.isoformat() if oc.approved_at else None,
-        "approved_by": oc.approved_by.full_name if oc.approved_by else None,
-        "source_onboarding_id": str(oc.source_onboarding_id) if oc.source_onboarding_id else None,
-        "is_active": oc.is_active,
-        "activated_at": oc.activated_at.isoformat(),
+        'id': str(oc.id),
+        'country_code': oc.country.code,
+        'country_name': oc.country.name,
+        'registration_number': oc.registration_number,
+        'tax_id': oc.tax_id,
+        'approval_status': oc.approval_status,
+        'approved_at': oc.approved_at.isoformat() if oc.approved_at else None,
+        'approved_by': oc.approved_by.full_name if oc.approved_by else None,
+        'source_onboarding_id': str(oc.source_onboarding_id) if oc.source_onboarding_id else None,
+        'is_active': oc.is_active,
+        'activated_at': oc.activated_at.isoformat(),
     }
 
 
 def _branch_payload(branch: Branch) -> dict:
     return {
-        "id": str(branch.id),
-        "name": branch.name,
-        "code": branch.code,
-        "country": branch.country.code,
-        "parent_id": str(branch.parent_id) if branch.parent_id else None,
-        "is_active": branch.is_active,
-        "metadata": branch.metadata,
-        "created_at": branch.created_at.isoformat(),
+        'id': str(branch.id),
+        'name': branch.name,
+        'code': branch.code,
+        'country': branch.country.code,
+        'parent_id': str(branch.parent_id) if branch.parent_id else None,
+        'is_active': branch.is_active,
+        'metadata': branch.metadata,
+        'created_at': branch.created_at.isoformat(),
     }
 
 
 def _setting_payload(s: OrganizationSettings) -> dict:
     return {
-        "id": str(s.id),
-        "key": s.key,
-        "value": "" if s.is_secret else s.value,
-        "value_type": s.value_type,
-        "description": s.description,
-        "is_secret": s.is_secret,
-        "updated_by": s.updated_by.full_name if s.updated_by else None,
+        'id': str(s.id),
+        'key': s.key,
+        'value': '' if s.is_secret else s.value,
+        'value_type': s.value_type,
+        'description': s.description,
+        'is_secret': s.is_secret,
+        'updated_by': s.updated_by.full_name if s.updated_by else None,
     }
 
 
 def _onboarding_payload(onboarding: OrganizationOnboarding) -> dict:
-    latest_payment = onboarding.payments.order_by("-created_at").first()
+    latest_payment = onboarding.payments.order_by('-created_at').first()
     return {
-        "onboarding_id": str(onboarding.id),
-        "system_id": str(onboarding.system_id),
-        "system_name": onboarding.system.name,
-        "organization_id": str(onboarding.organization_id) if onboarding.organization_id else None,
-        "status": onboarding.status,
-        "editable_by_client": onboarding.editable_by_client,
-        "legal_name": onboarding.legal_name,
-        "trading_name": onboarding.trading_name,
-        "organization_type": onboarding.organization_type,
-        "products_needed": onboarding.products_needed,
-        "monthly_transaction_volume": onboarding.monthly_transaction_volume,
-        "staff_size": onboarding.staff_size,
-        "pain_points": onboarding.pain_points,
-        "contact_email": onboarding.contact_email,
-        "contact_phone": onboarding.contact_phone,
-        "website": onboarding.website,
-        "description": onboarding.description,
-        "metadata": onboarding.metadata,
-        "submitted_at": onboarding.submitted_at.isoformat() if onboarding.submitted_at else None,
-        "reviewed_at": onboarding.reviewed_at.isoformat() if onboarding.reviewed_at else None,
-        "completed_at": onboarding.completed_at.isoformat() if onboarding.completed_at else None,
-        "created_organization_id": str(onboarding.created_organization_id)
-        if onboarding.created_organization_id else None,
-        "applicant_notes": onboarding.applicant_notes,
-        "internal_notes": onboarding.internal_notes,
-        "documents": [
-            _document_payload(doc)
-            for doc in onboarding.documents.all().order_by("-created_at")
+        'onboarding_id': str(onboarding.id),
+        'system_id': str(onboarding.system_id),
+        'system_name': onboarding.system.name,
+        'organization_id': str(onboarding.organization_id) if onboarding.organization_id else None,
+        'status': onboarding.status,
+        'editable_by_client': onboarding.editable_by_client,
+        'legal_name': onboarding.legal_name,
+        'trading_name': onboarding.trading_name,
+        'organization_type': onboarding.organization_type,
+        'products_needed': onboarding.products_needed,
+        'monthly_transaction_volume': onboarding.monthly_transaction_volume,
+        'staff_size': onboarding.staff_size,
+        'pain_points': onboarding.pain_points,
+        'contact_email': onboarding.contact_email,
+        'contact_phone': onboarding.contact_phone,
+        'website': onboarding.website,
+        'description': onboarding.description,
+        'metadata': onboarding.metadata,
+        'submitted_at': onboarding.submitted_at.isoformat() if onboarding.submitted_at else None,
+        'reviewed_at': onboarding.reviewed_at.isoformat() if onboarding.reviewed_at else None,
+        'completed_at': onboarding.completed_at.isoformat() if onboarding.completed_at else None,
+        'created_organization_id': str(onboarding.created_organization_id)
+        if onboarding.created_organization_id
+        else None,
+        'applicant_notes': onboarding.applicant_notes,
+        'internal_notes': onboarding.internal_notes,
+        'documents': [
+            _document_payload(doc) for doc in onboarding.documents.all().order_by('-created_at')
         ],
-        "countries": [
+        'countries': [
             _onboarding_country_payload(country_request)
-            for country_request in onboarding.country_requests.select_related("country").order_by("created_at")
+            for country_request in onboarding.country_requests.select_related('country').order_by(
+                'created_at'
+            )
         ],
-        "selected_services": [
+        'selected_services': [
             _service_selection_payload(selection)
-            for selection in onboarding.service_selections.select_related("service").order_by("service__sort_order", "service__name")
+            for selection in onboarding.service_selections.select_related('service').order_by(
+                'service__sort_order', 'service__name'
+            )
         ],
-        "payments": [
-            _payment_payload(payment)
-            for payment in onboarding.payments.order_by("-created_at")
+        'payments': [
+            _payment_payload(payment) for payment in onboarding.payments.order_by('-created_at')
         ],
-        "verification_runs": [
+        'verification_runs': [
             _verification_run_payload(run)
-            for run in onboarding.verification_runs.select_related("verification_check", "triggered_by").order_by("-created_at")
+            for run in onboarding.verification_runs.select_related(
+                'verification_check', 'triggered_by'
+            ).order_by('-created_at')
         ],
-        "steps": _onboarding_steps(onboarding, latest_payment),
+        'steps': _onboarding_steps(onboarding, latest_payment),
     }
 
 
 def _onboarding_country_payload(country_request: OrganizationOnboardingCountry) -> dict:
     return {
-        "country_request_id": str(country_request.id),
-        "country_id": str(country_request.country_id),
-        "country_code": country_request.country.code,
-        "country_name": country_request.country.name,
-        "registration_number": country_request.registration_number,
-        "tax_id": country_request.tax_id,
-        "address": country_request.address,
-        "metadata": country_request.metadata,
+        'country_request_id': str(country_request.id),
+        'country_id': str(country_request.country_id),
+        'country_code': country_request.country.code,
+        'country_name': country_request.country.name,
+        'registration_number': country_request.registration_number,
+        'tax_id': country_request.tax_id,
+        'address': country_request.address,
+        'metadata': country_request.metadata,
     }
 
 
 def _document_payload(doc: OnboardingDocument) -> dict:
     return {
-        "document_id": str(doc.id),
-        "document_type": doc.document_type,
-        "label": doc.label,
-        "status": doc.status,
-        "file_name": doc.file_name,
-        "file_size": doc.file_size,
-        "mime_type": doc.mime_type,
-        "uploaded_by": doc.uploaded_by.full_name if doc.uploaded_by else None,
-        "uploaded_at": doc.created_at.isoformat() if hasattr(doc, "created_at") else None,
-        "reviewed_at": doc.reviewed_at.isoformat() if doc.reviewed_at else None,
-        "review_notes": doc.review_notes,
-        "expires_at": doc.expires_at.isoformat() if doc.expires_at else None,
+        'document_id': str(doc.id),
+        'document_type': doc.document_type,
+        'label': doc.label,
+        'status': doc.status,
+        'file_name': doc.file_name,
+        'file_size': doc.file_size,
+        'mime_type': doc.mime_type,
+        'uploaded_by': doc.uploaded_by.full_name if doc.uploaded_by else None,
+        'uploaded_at': doc.created_at.isoformat() if hasattr(doc, 'created_at') else None,
+        'reviewed_at': doc.reviewed_at.isoformat() if doc.reviewed_at else None,
+        'review_notes': doc.review_notes,
+        'expires_at': doc.expires_at.isoformat() if doc.expires_at else None,
     }
 
 
 def _service_product_payload(service: OnboardingServiceProduct) -> dict:
     return {
-        "id": str(service.id),
-        "code": service.code,
-        "name": service.name,
-        "description": service.description,
-        "amount": str(service.amount),
-        "tax_amount": str(service.tax_amount),
-        "total_amount": str(service.total_amount),
-        "currency": service.currency,
-        "is_active": service.is_active,
-        "metadata": service.metadata,
+        'id': str(service.id),
+        'code': service.code,
+        'name': service.name,
+        'description': service.description,
+        'amount': str(service.amount),
+        'tax_amount': str(service.tax_amount),
+        'total_amount': str(service.total_amount),
+        'currency': service.currency,
+        'is_active': service.is_active,
+        'metadata': service.metadata,
     }
 
 
 def _service_selection_payload(selection) -> dict:
     return {
-        "id": str(selection.id),
-        "service": _service_product_payload(selection.service),
-        "selected_by": selection.selected_by.full_name if selection.selected_by else None,
-        "selected_at": selection.created_at.isoformat(),
+        'id': str(selection.id),
+        'service': _service_product_payload(selection.service),
+        'selected_by': selection.selected_by.full_name if selection.selected_by else None,
+        'selected_at': selection.created_at.isoformat(),
     }
 
 
 def _payment_payload(payment: OnboardingPayment) -> dict:
     return {
-        "id": str(payment.id),
-        "status": payment.status,
-        "method": payment.method,
-        "currency": payment.currency,
-        "amount": str(payment.amount),
-        "tax_amount": str(payment.tax_amount),
-        "total_amount": str(payment.total_amount),
-        "external_reference": payment.external_reference,
-        "paid_at": payment.paid_at.isoformat() if payment.paid_at else None,
-        "service_snapshot": payment.service_snapshot,
-        "provider_payload": payment.provider_payload,
-        "created_at": payment.created_at.isoformat(),
+        'id': str(payment.id),
+        'status': payment.status,
+        'method': payment.method,
+        'currency': payment.currency,
+        'amount': str(payment.amount),
+        'tax_amount': str(payment.tax_amount),
+        'total_amount': str(payment.total_amount),
+        'external_reference': payment.external_reference,
+        'paid_at': payment.paid_at.isoformat() if payment.paid_at else None,
+        'service_snapshot': payment.service_snapshot,
+        'provider_payload': payment.provider_payload,
+        'created_at': payment.created_at.isoformat(),
     }
 
 
 def _verification_check_payload(check: OnboardingVerificationCheck) -> dict:
     return {
-        "id": str(check.id),
-        "code": check.code,
-        "name": check.name,
-        "description": check.description,
-        "integration_code": check.integration_code,
-        "trigger_mode": check.trigger_mode,
-        "required_for_onboarding": check.required_for_onboarding,
-        "is_active": check.is_active,
-        "metadata": check.metadata,
+        'id': str(check.id),
+        'code': check.code,
+        'name': check.name,
+        'description': check.description,
+        'integration_code': check.integration_code,
+        'trigger_mode': check.trigger_mode,
+        'required_for_onboarding': check.required_for_onboarding,
+        'is_active': check.is_active,
+        'metadata': check.metadata,
     }
 
 
 def _verification_run_payload(run: OnboardingVerificationRun) -> dict:
     return {
-        "id": str(run.id),
-        "check": _verification_check_payload(run.verification_check),
-        "status": run.status,
-        "trigger_mode": run.trigger_mode,
-        "external_reference": run.external_reference,
-        "request_payload": run.request_payload,
-        "response_payload": run.response_payload,
-        "result_summary": run.result_summary,
-        "error_message": run.error_message,
-        "triggered_by": run.triggered_by.full_name if run.triggered_by else None,
-        "triggered_at": run.triggered_at.isoformat() if run.triggered_at else None,
-        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        'id': str(run.id),
+        'check': _verification_check_payload(run.verification_check),
+        'status': run.status,
+        'trigger_mode': run.trigger_mode,
+        'external_reference': run.external_reference,
+        'request_payload': run.request_payload,
+        'response_payload': run.response_payload,
+        'result_summary': run.result_summary,
+        'error_message': run.error_message,
+        'triggered_by': run.triggered_by.full_name if run.triggered_by else None,
+        'triggered_at': run.triggered_at.isoformat() if run.triggered_at else None,
+        'completed_at': run.completed_at.isoformat() if run.completed_at else None,
     }
 
 
-def _onboarding_steps(onboarding: OrganizationOnboarding, latest_payment: Optional[OnboardingPayment]) -> list[dict]:
+def _onboarding_steps(
+    onboarding: OrganizationOnboarding, latest_payment: OnboardingPayment | None
+) -> list[dict]:
     documents = list(onboarding.documents.all())
-    details_done = bool(onboarding.legal_name and onboarding.country_requests.exists() and documents)
-    document_verification_done = bool(documents) and all(doc.status == "approved" for doc in documents)
-    org_verified = onboarding.status in (OnboardingStatus.VERIFIED, OnboardingStatus.APPROVED, OnboardingStatus.ONBOARDED)
+    details_done = bool(
+        onboarding.legal_name and onboarding.country_requests.exists() and documents
+    )
+    document_verification_done = bool(documents) and all(
+        doc.status == 'approved' for doc in documents
+    )
+    org_verified = onboarding.status in (
+        OnboardingStatus.VERIFIED,
+        OnboardingStatus.APPROVED,
+        OnboardingStatus.ONBOARDED,
+    )
     payment_done = onboarding.payments.filter(status=OnboardingPayment.Status.SUCCESS).exists()
-    required_runs = onboarding.verification_runs.filter(verification_check__required_for_onboarding=True)
-    api_verification_done = required_runs.exists() and not required_runs.exclude(status=OnboardingVerificationRun.Status.SUCCESS).exists()
+    required_runs = onboarding.verification_runs.filter(
+        verification_check__required_for_onboarding=True
+    )
+    api_verification_done = (
+        required_runs.exists()
+        and not required_runs.exclude(status=OnboardingVerificationRun.Status.SUCCESS).exists()
+    )
 
     return [
         {
-            "key": "details_provided",
-            "label": "Details provided",
-            "order": 1,
-            "status": "done" if details_done else "pending",
+            'key': 'details_provided',
+            'label': 'Details provided',
+            'order': 1,
+            'status': 'done' if details_done else 'pending',
         },
         {
-            "key": "document_verification",
-            "label": "Document verification",
-            "order": 2,
-            "status": "done" if document_verification_done else "pending",
+            'key': 'document_verification',
+            'label': 'Document verification',
+            'order': 2,
+            'status': 'done' if document_verification_done else 'pending',
         },
         {
-            "key": "organization_verification",
-            "label": "Organization verification",
-            "order": 3,
-            "status": "done" if org_verified else "pending",
+            'key': 'organization_verification',
+            'label': 'Organization verification',
+            'order': 3,
+            'status': 'done' if org_verified else 'pending',
         },
         {
-            "key": "services_selected",
-            "label": "Services selected",
-            "order": 4,
-            "status": "done" if onboarding.service_selections.exists() else "pending",
+            'key': 'services_selected',
+            'label': 'Services selected',
+            'order': 4,
+            'status': 'done' if onboarding.service_selections.exists() else 'pending',
         },
         {
-            "key": "payment",
-            "label": "Onboarding payment",
-            "order": 5,
-            "status": "done" if payment_done else "pending",
-            "latest_payment_status": latest_payment.status if latest_payment else None,
+            'key': 'payment',
+            'label': 'Onboarding payment',
+            'order': 5,
+            'status': 'done' if payment_done else 'pending',
+            'latest_payment_status': latest_payment.status if latest_payment else None,
         },
         {
-            "key": "api_verification",
-            "label": "API verification",
-            "order": 6,
-            "status": "done" if api_verification_done else "pending",
+            'key': 'api_verification',
+            'label': 'API verification',
+            'order': 6,
+            'status': 'done' if api_verification_done else 'pending',
         },
     ]
 
 
-@require_user_context(required_permission="organization.view")
+@require_user_context(required_permission='organization.view')
 @require_GET
 def organization_detail_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     try:
         org = _get_organization(organization_id)
         if not org:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="Organization not found."
-            )
+            return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
         return ResponseProvider.success(**_organization_payload(org))
 
     except Exception as e:
-        logger.exception("organization_detail_view: %s", e)
+        logger.exception('organization_detail_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.view")
+@require_user_context(required_permission='organization.view')
 @require_GET
 def organization_list_view(request: ExtendedRequest) -> JsonResponse:
     try:
-        system_id = request.GET.get("system_id")
+        system_id = request.GET.get('system_id')
         if not system_id:
             return ResponseProvider.bad_request(
-                error="missing_params",
-                message="system_id is required."
+                error='missing_params', message='system_id is required.'
             )
 
         qs = (
-            Organization.objects
-            .filter(system_id=system_id)
-            .select_related("system")
-            .order_by("name")
+            Organization.objects.filter(system_id=system_id)
+            .select_related('system')
+            .order_by('name')
         )
 
-        if is_active := request.GET.get("is_active"):
-            qs = qs.filter(is_active=is_active.lower() == "true")
-        if verified := request.GET.get("verified"):
-            qs = qs.filter(verified=verified.lower() == "true")
+        if is_active := request.GET.get('is_active'):
+            qs = qs.filter(is_active=is_active.lower() == 'true')
+        if verified := request.GET.get('verified'):
+            qs = qs.filter(verified=verified.lower() == 'true')
 
-        return ResponseProvider.success(
-            organizations=[_organization_payload(o) for o in qs]
-        )
+        return ResponseProvider.success(organizations=[_organization_payload(o) for o in qs])
 
     except Exception as e:
-        logger.exception("organization_list_view: %s", e)
+        logger.exception('organization_list_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.update")
-@require_http_methods(["PATCH"])
+@require_user_context(required_permission='organization.update')
+@require_http_methods(['PATCH'])
 def organization_update_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     org = _get_organization(organization_id)
     if not org:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Organization not found.')
     try:
         data = request.data
         org = organization_service.update_organization(
             organization=org,
             performed_by=request.system_user,
-            name=data.get("name"),
-            description=data.get("description"),
-            logo_url=data.get("logo_url"),
-            website=data.get("website"),
+            name=data.get('name'),
+            description=data.get('description'),
+            logo_url=data.get('logo_url'),
+            website=data.get('website'),
         )
 
         return ResponseProvider.success(**_organization_payload(org))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("organization_update_view: %s", e)
+        logger.exception('organization_update_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.deactivate")
+@require_user_context(required_permission='organization.deactivate')
 @require_POST
 def organization_deactivate_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     org = _get_organization(organization_id)
     if not org:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
     try:
         org = organization_service.deactivate_organization(
-            organization=org,
-            performed_by=request.system_user
+            organization=org, performed_by=request.system_user
         )
 
         return ResponseProvider.success(**_organization_payload(org))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("organization_deactivate_view: %s", e)
+        logger.exception('organization_deactivate_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.deactivate")
+@require_user_context(required_permission='organization.deactivate')
 @require_POST
 def organization_reactivate_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     org = _get_organization(organization_id)
     if not org:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
     try:
         org = organization_service.reactivate_organization(
-            organization=org,
-            performed_by=request.system_user
+            organization=org, performed_by=request.system_user
         )
 
         return ResponseProvider.success(**_organization_payload(org))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("organization_reactivate_view: %s", e)
+        logger.exception('organization_reactivate_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.view")
+@require_user_context(required_permission='organization.view')
 @require_GET
 def org_country_list_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     try:
         org = _get_organization(organization_id)
         if not org:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="Organization not found."
-            )
+            return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
-        countries = (
-            org.organization_countries
-            .select_related("country")
-            .order_by("country__name")
-        )
+        countries = org.organization_countries.select_related('country').order_by('country__name')
 
-        return ResponseProvider.success(
-            countries=[_org_country_payload(c) for c in countries]
-        )
+        return ResponseProvider.success(countries=[_org_country_payload(c) for c in countries])
 
     except Exception as e:
-        logger.exception("org_country_list_view: %s", e)
+        logger.exception('org_country_list_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_countries")
+@require_user_context(required_permission='organization.manage_countries')
 @require_POST
 def org_country_add_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     org = _get_organization(organization_id)
     if not org:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
     try:
         data = request.data
         country = _get_country(data)
         if not country:
             return ResponseProvider.bad_request(
-                error="invalid_country",
-                message="Country not found."
+                error='invalid_country', message='Country not found.'
             )
 
         oc = organization_service.add_country(
             organization=org,
             country=country,
             performed_by=request.system_user,
-            registration_number=data.get("registration_number", ""),
-            tax_id=data.get("tax_id", ""),
+            registration_number=data.get('registration_number', ''),
+            tax_id=data.get('tax_id', ''),
         )
 
         return ResponseProvider.success(**_org_country_payload(oc))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("org_country_add_view: %s", e)
+        logger.exception('org_country_add_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_countries")
-@require_http_methods(["PATCH"])
+@require_user_context(required_permission='organization.manage_countries')
+@require_http_methods(['PATCH'])
 def org_country_update_view(request: ExtendedRequest, org_country_id: str) -> JsonResponse:
     oc = _get_org_country(org_country_id)
     if not oc:
         return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization country not found."
+            error='not_found', message='Organization country not found.'
         )
 
     try:
@@ -602,341 +575,276 @@ def org_country_update_view(request: ExtendedRequest, org_country_id: str) -> Js
         oc = organization_service.update_country(
             org_country=oc,
             performed_by=request.system_user,
-            registration_number=data.get("registration_number"),
-            tax_id=data.get("tax_id"),
+            registration_number=data.get('registration_number'),
+            tax_id=data.get('tax_id'),
         )
 
         return ResponseProvider.success(**_org_country_payload(oc))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("org_country_update_view: %s", e)
+        logger.exception('org_country_update_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_countries")
+@require_user_context(required_permission='organization.manage_countries')
 @require_POST
 def org_country_deactivate_view(request: ExtendedRequest, org_country_id: str) -> JsonResponse:
     oc = _get_org_country(org_country_id)
     if not oc:
         return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization country not found."
+            error='not_found', message='Organization country not found.'
         )
 
     try:
         oc = organization_service.deactivate_country(
-            org_country=oc,
-            performed_by=request.system_user
+            org_country=oc, performed_by=request.system_user
         )
 
         return ResponseProvider.success(**_org_country_payload(oc))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("org_country_deactivate_view: %s", e)
+        logger.exception('org_country_deactivate_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.view")
+@require_user_context(required_permission='organization.view')
 @require_GET
 def branch_list_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     try:
         org = _get_organization(organization_id)
         if not org:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="Organization not found."
-            )
+            return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
         qs = (
-            Branch.objects
-            .filter(organization=org)
-            .select_related("country", "parent")
-            .order_by("country__code", "name")
+            Branch.objects.filter(organization=org)
+            .select_related('country', 'parent')
+            .order_by('country__code', 'name')
         )
 
-        if country_id := request.GET.get("country_id"):
+        if country_id := request.GET.get('country_id'):
             qs = qs.filter(country_id=country_id)
-        if is_active := request.GET.get("is_active"):
-            qs = qs.filter(is_active=is_active.lower() == "true")
-        if parent_id := request.GET.get("parent_id"):
+        if is_active := request.GET.get('is_active'):
+            qs = qs.filter(is_active=is_active.lower() == 'true')
+        if parent_id := request.GET.get('parent_id'):
             qs = qs.filter(parent_id=parent_id)
-        if request.GET.get("root_only") == "true":
+        if request.GET.get('root_only') == 'true':
             qs = qs.filter(parent__isnull=True)
 
-        return ResponseProvider.success(
-            branches=[_branch_payload(b) for b in qs]
-        )
+        return ResponseProvider.success(branches=[_branch_payload(b) for b in qs])
 
     except Exception as e:
-        logger.exception("branch_list_view: %s", e)
+        logger.exception('branch_list_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.view")
+@require_user_context(required_permission='organization.view')
 @require_GET
 def branch_detail_view(request: ExtendedRequest, branch_id: str) -> JsonResponse:
     try:
         branch = _get_branch(branch_id)
         if not branch:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="Branch not found."
-            )
+            return ResponseProvider.not_found(error='not_found', message='Branch not found.')
 
         return ResponseProvider.success(**_branch_payload(branch))
 
     except Exception as e:
-        logger.exception("branch_detail_view: %s", e)
+        logger.exception('branch_detail_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_branches")
+@require_user_context(required_permission='organization.manage_branches')
 @require_POST
 def branch_create_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     org = _get_organization(organization_id)
     if not org:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
     try:
         data = request.data
         country = _get_country(data)
         if not country:
             return ResponseProvider.bad_request(
-                error="invalid_country",
-                message="country_id is required."
+                error='invalid_country', message='country_id is required.'
             )
 
         parent = None
-        if parent_id := data.get("parent_id"):
+        if parent_id := data.get('parent_id'):
             parent = _get_branch(parent_id)
             if not parent:
                 return ResponseProvider.bad_request(
-                    error="invalid_parent",
-                    message="Parent branch not found."
+                    error='invalid_parent', message='Parent branch not found.'
                 )
 
         branch = organization_service.create_branch(
             organization=org,
             country=country,
             performed_by=request.system_user,
-            name=data.get("name", ""),
-            code=data.get("code", ""),
+            name=data.get('name', ''),
+            code=data.get('code', ''),
             parent=parent,
-            metadata=data.get("metadata"),
+            metadata=data.get('metadata'),
         )
 
         return ResponseProvider.success(**_branch_payload(branch))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("branch_create_view: %s", e)
+        logger.exception('branch_create_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_branches")
-@require_http_methods(["PATCH"])
+@require_user_context(required_permission='organization.manage_branches')
+@require_http_methods(['PATCH'])
 def branch_update_view(request: ExtendedRequest, branch_id: str) -> JsonResponse:
     branch = _get_branch(branch_id)
     if not branch:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Branch not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Branch not found.')
 
     try:
         data = request.data
 
         parent = None
-        if "parent_id" in data:
-            raw_parent_id = data["parent_id"]
+        if 'parent_id' in data:
+            raw_parent_id = data['parent_id']
             if raw_parent_id:
                 parent = _get_branch(raw_parent_id)
                 if not parent:
                     return ResponseProvider.bad_request(
-                        error="invalid_parent",
-                        message="Parent branch not found."
+                        error='invalid_parent', message='Parent branch not found.'
                     )
 
         branch = organization_service.update_branch(
             branch=branch,
             performed_by=request.system_user,
-            name=data.get("name"),
-            code=data.get("code"),
+            name=data.get('name'),
+            code=data.get('code'),
             parent=parent,
-            metadata=data.get("metadata"),
+            metadata=data.get('metadata'),
         )
 
         return ResponseProvider.success(**_branch_payload(branch))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("branch_update_view: %s", e)
+        logger.exception('branch_update_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_branches")
+@require_user_context(required_permission='organization.manage_branches')
 @require_POST
 def branch_deactivate_view(request: ExtendedRequest, branch_id: str) -> JsonResponse:
     branch = _get_branch(branch_id)
     if not branch:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Branch not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Branch not found.')
 
     try:
         branch = organization_service.deactivate_branch(
-            branch=branch,
-            performed_by=request.system_user
+            branch=branch, performed_by=request.system_user
         )
 
         return ResponseProvider.success(**_branch_payload(branch))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_management_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_management_error', message=str(e))
     except Exception as e:
-        logger.exception("branch_deactivate_view: %s", e)
+        logger.exception('branch_deactivate_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_branches")
+@require_user_context(required_permission='organization.manage_branches')
 @require_POST
 def branch_reactivate_view(request: ExtendedRequest, branch_id: str) -> JsonResponse:
     branch = _get_branch(branch_id)
     if not branch:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Branch not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Branch not found.')
 
     try:
         branch = organization_service.reactivate_branch(
-            branch=branch,
-            performed_by=request.system_user
+            branch=branch, performed_by=request.system_user
         )
 
         return ResponseProvider.success(**_branch_payload(branch))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_error', message=str(e))
     except Exception as e:
-        logger.exception("branch_reactivate_view: %s", e)
+        logger.exception('branch_reactivate_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.view_settings")
+@require_user_context(required_permission='organization.view_settings')
 @require_GET
 def settings_list_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     try:
         org = _get_organization(organization_id)
         if not org:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="Organization not found."
-            )
+            return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
-        settings = org.settings.select_related("updated_by").order_by("key")
+        settings = org.settings.select_related('updated_by').order_by('key')
 
-        return ResponseProvider.success(
-            settings=[_setting_payload(s) for s in settings]
-        )
+        return ResponseProvider.success(settings=[_setting_payload(s) for s in settings])
 
     except Exception as e:
-        logger.exception("settings_list_view: %s", e)
+        logger.exception('settings_list_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_settings")
+@require_user_context(required_permission='organization.manage_settings')
 @require_POST
 def settings_set_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
     org = _get_organization(organization_id)
     if not org:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
     try:
         data = request.data
         setting = organization_service.set_setting(
             organization=org,
             performed_by=request.system_user,
-            key=data.get("key", ""),
-            value=data.get("value", ""),
-            value_type=data.get("value_type", OrganizationSettings.ValueType.STRING),
-            description=data.get("description", ""),
-            is_secret=bool(data.get("is_secret", False)),
+            key=data.get('key', ''),
+            value=data.get('value', ''),
+            value_type=data.get('value_type', OrganizationSettings.ValueType.STRING),
+            description=data.get('description', ''),
+            is_secret=bool(data.get('is_secret', False)),
         )
 
         return ResponseProvider.success(**_setting_payload(setting))
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_service_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_service_error', message=str(e))
     except Exception as e:
-        logger.exception("settings_set_view: %s", e)
+        logger.exception('settings_set_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="organization.manage_settings")
-@require_http_methods(["DELETE"])
+@require_user_context(required_permission='organization.manage_settings')
+@require_http_methods(['DELETE'])
 def settings_delete_view(request: ExtendedRequest, organization_id: str, key: str) -> JsonResponse:
     org = _get_organization(organization_id)
     if not org:
-        return ResponseProvider.not_found(
-            error="not_found",
-            message="Organization not found."
-        )
+        return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
     try:
         organization_service.delete_setting(
-            organization=org,
-            performed_by=request.system_user,
-            key=key
+            organization=org, performed_by=request.system_user, key=key
         )
 
         return ResponseProvider.success()
 
     except OrganizationServiceError as e:
-        return ResponseProvider.bad_request(
-            error="organization_service_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='organization_service_error', message=str(e))
     except Exception as e:
-        logger.exception("settings_delete_view: %s", e)
+        logger.exception('settings_delete_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.create")
+@require_user_context(required_permission='onboarding.create')
 @require_POST
 def onboarding_create_view(request: ExtendedRequest) -> JsonResponse:
     try:
@@ -946,43 +854,37 @@ def onboarding_create_view(request: ExtendedRequest) -> JsonResponse:
         system = _get_system(data)
         if not system:
             return ResponseProvider.bad_request(
-                error="invalid_system",
-                message="System not found or inactive."
+                error='invalid_system', message='System not found or inactive.'
             )
 
         organization = _get_organization_from_data(data)
-        if data.get("organization_id") and not organization:
+        if data.get('organization_id') and not organization:
             return ResponseProvider.bad_request(
-                error="invalid_organization",
-                message="Organization not found."
+                error='invalid_organization', message='Organization not found.'
             )
 
-        countries = data.get("countries") or []
+        countries = data.get('countries') or []
         if not isinstance(countries, list):
             return ResponseProvider.bad_request(
-                error="invalid_country",
-                message="countries must be a list."
+                error='invalid_country', message='countries must be a list.'
             )
 
         for country_data in countries:
             if not isinstance(country_data, dict):
                 return ResponseProvider.bad_request(
-                    error="invalid_country",
-                    message="Each country must be an object."
+                    error='invalid_country', message='Each country must be an object.'
                 )
-            country_code = country_data.get("country_code")
-            country = Country.objects.filter(code__iexact=str(country_code or "").strip()).first()
+            country_code = country_data.get('country_code')
+            country = Country.objects.filter(code__iexact=str(country_code or '').strip()).first()
             if not country:
                 return ResponseProvider.bad_request(
-                    error="invalid_country",
-                    message=f"Country not found for code '{country_code}'."
+                    error='invalid_country', message=f"Country not found for code '{country_code}'."
                 )
-            country_data["country"] = country
+            country_data['country'] = country
 
         if not countries:
             return ResponseProvider.bad_request(
-                error="invalid_country",
-                message="At least one valid country is required."
+                error='invalid_country', message='At least one valid country is required.'
             )
 
         onboarding = onboarding_service.create_application(
@@ -990,77 +892,82 @@ def onboarding_create_view(request: ExtendedRequest) -> JsonResponse:
             contact_system_user=request.system_user,
             organization=organization,
             countries=countries,
-            legal_name=data.get("legal_name", ""),
-            trading_name=data.get("trading_name", ""),
-            organization_type=data.get("organization_type", ""),
-            products_needed=data.get("products_needed") or [],
-            monthly_transaction_volume=data.get("monthly_transaction_volume", ""),
-            staff_size=data.get("staff_size", ""),
-            pain_points=data.get("pain_points") or [],
-            contact_email=data.get("contact_email", ""),
-            contact_phone=data.get("contact_phone", ""),
-            website=data.get("website", ""),
-            description=data.get("description", ""),
-            metadata=data.get("metadata"),
+            legal_name=data.get('legal_name', ''),
+            trading_name=data.get('trading_name', ''),
+            organization_type=data.get('organization_type', ''),
+            products_needed=data.get('products_needed') or [],
+            monthly_transaction_volume=data.get('monthly_transaction_volume', ''),
+            staff_size=data.get('staff_size', ''),
+            pain_points=data.get('pain_points') or [],
+            contact_email=data.get('contact_email', ''),
+            contact_phone=data.get('contact_phone', ''),
+            website=data.get('website', ''),
+            description=data.get('description', ''),
+            metadata=data.get('metadata'),
             documents=files,
         )
 
         return ResponseProvider.success(**_onboarding_payload(onboarding))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_create_view: %s", e)
+        logger.exception('onboarding_create_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.view")
+@require_user_context(required_permission='onboarding.view')
 @require_GET
 def onboarding_list_view(request: ExtendedRequest) -> JsonResponse:
     try:
         qs = (
-            OrganizationOnboarding.objects
-            .select_related("system", "contact_system_user", "created_organization", "organization")
-            .prefetch_related("country_requests__country", "documents", "service_selections__service", "payments", "verification_runs__verification_check")
-            .order_by("-created_at")
+            OrganizationOnboarding.objects.select_related(
+                'system', 'contact_system_user', 'created_organization', 'organization'
+            )
+            .prefetch_related(
+                'country_requests__country',
+                'documents',
+                'service_selections__service',
+                'payments',
+                'verification_runs__verification_check',
+            )
+            .order_by('-created_at')
         )
 
-        if system_id := request.GET.get("system_id"):
+        if system_id := request.GET.get('system_id'):
             qs = qs.filter(system_id=system_id)
-        if status := request.GET.get("status"):
+        if status := request.GET.get('status'):
             qs = qs.filter(status=status)
-        if statuses := request.GET.get("statuses"):
-            qs = qs.filter(status__in=[value.strip() for value in statuses.split(",") if value.strip()])
-        if contact_system_user_id := request.GET.get("contact_system_user_id"):
+        if statuses := request.GET.get('statuses'):
+            qs = qs.filter(
+                status__in=[value.strip() for value in statuses.split(',') if value.strip()]
+            )
+        if contact_system_user_id := request.GET.get('contact_system_user_id'):
             qs = qs.filter(contact_system_user_id=contact_system_user_id)
-        if organization_id := request.GET.get("organization_id"):
+        if organization_id := request.GET.get('organization_id'):
             qs = qs.filter(organization_id=organization_id)
-        if payment_status := request.GET.get("payment_status"):
+        if payment_status := request.GET.get('payment_status'):
             qs = qs.filter(payments__status=payment_status).distinct()
-        if verification_status := request.GET.get("verification_status"):
+        if verification_status := request.GET.get('verification_status'):
             qs = qs.filter(verification_runs__status=verification_status).distinct()
 
         return ResponseProvider.success(
             onboardings=[_onboarding_payload(onboarding) for onboarding in qs]
         )
     except Exception as e:
-        logger.exception("onboarding_list_view: %s", e)
+        logger.exception('onboarding_list_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
-@require_http_methods(["PATCH"])
+@require_user_context(required_permission='onboarding.update')
+@require_http_methods(['PATCH'])
 def onboarding_update_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
         data = request.data
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
 
         updated = onboarding_service.update_application(
@@ -1072,16 +979,13 @@ def onboarding_update_view(request: ExtendedRequest, onboarding_id: str) -> Json
         return ResponseProvider.success(**_onboarding_payload(updated))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_update_view: %s", e)
+        logger.exception('onboarding_update_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
+@require_user_context(required_permission='onboarding.update')
 @require_POST
 def onboarding_country_add_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
@@ -1089,89 +993,82 @@ def onboarding_country_add_view(request: ExtendedRequest, onboarding_id: str) ->
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
 
         country = _get_country(data)
         if not country:
             return ResponseProvider.bad_request(
-                error="invalid_country",
-                message="Country not found."
+                error='invalid_country', message='Country not found.'
             )
 
         added = onboarding_service.add_country(
             onboarding=onboarding,
             performed_by=request.system_user,
             country=country,
-            registration_number=data.get("registration_number", ""),
-            tax_id=data.get("tax_id", ""),
-            address=data.get("address", ""),
-            metadata=data.get("metadata"),
+            registration_number=data.get('registration_number', ''),
+            tax_id=data.get('tax_id', ''),
+            address=data.get('address', ''),
+            metadata=data.get('metadata'),
         )
 
         return ResponseProvider.success(**_onboarding_country_payload(added))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_country_add_view: %s", e)
+        logger.exception('onboarding_country_add_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
-@require_http_methods(["PATCH"])
-def onboarding_country_update_view(request: ExtendedRequest, country_request_id: str) -> JsonResponse:
+@require_user_context(required_permission='onboarding.update')
+@require_http_methods(['PATCH'])
+def onboarding_country_update_view(
+    request: ExtendedRequest, country_request_id: str
+) -> JsonResponse:
     try:
         data = request.data
         country_request = _get_onboarding_country(country_request_id)
         if not country_request:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding country not found."
+                error='not_found', message='Onboarding country not found.'
             )
 
         country = _get_country(data) if has_country_value(data) else None
         if has_country_value(data) and not country:
             return ResponseProvider.bad_request(
-                error="invalid_country",
-                message="Country not found."
+                error='invalid_country', message='Country not found.'
             )
 
         updated = onboarding_service.update_country(
             country_request=country_request,
             performed_by=request.system_user,
             country=country,
-            registration_number=data.get("registration_number"),
-            tax_id=data.get("tax_id"),
-            address=data.get("address"),
-            metadata=data.get("metadata"),
+            registration_number=data.get('registration_number'),
+            tax_id=data.get('tax_id'),
+            address=data.get('address'),
+            metadata=data.get('metadata'),
         )
 
         return ResponseProvider.success(**_onboarding_country_payload(updated))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_country_update_view: %s", e)
+        logger.exception('onboarding_country_update_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
-@require_http_methods(["DELETE"])
-def onboarding_country_remove_view(request: ExtendedRequest, country_request_id: str) -> JsonResponse:
+@require_user_context(required_permission='onboarding.update')
+@require_http_methods(['DELETE'])
+def onboarding_country_remove_view(
+    request: ExtendedRequest, country_request_id: str
+) -> JsonResponse:
     try:
         country_request = _get_onboarding_country(country_request_id)
         if not country_request:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding country not found."
+                error='not_found', message='Onboarding country not found.'
             )
 
         onboarding_service.remove_country(
@@ -1182,32 +1079,27 @@ def onboarding_country_remove_view(request: ExtendedRequest, country_request_id:
         return ResponseProvider.success()
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_country_remove_view: %s", e)
+        logger.exception('onboarding_country_remove_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.create")
+@require_user_context(required_permission='onboarding.create')
 @require_POST
-def organization_country_onboarding_create_view(request: ExtendedRequest, organization_id: str) -> JsonResponse:
+def organization_country_onboarding_create_view(
+    request: ExtendedRequest, organization_id: str
+) -> JsonResponse:
     try:
         data = request.data
         org = _get_organization(organization_id)
         if not org:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="Organization not found."
-            )
+            return ResponseProvider.not_found(error='not_found', message='Organization not found.')
 
         country = _get_country(data)
         if not country:
             return ResponseProvider.bad_request(
-                error="invalid_country",
-                message="Country not found."
+                error='invalid_country', message='Country not found.'
             )
 
         onboarding = onboarding_service.create_country_application_for_onboarded_organization(
@@ -1215,25 +1107,22 @@ def organization_country_onboarding_create_view(request: ExtendedRequest, organi
             contact_system_user=request.system_user,
             country=country,
             documents=request.FILES,
-            registration_number=data.get("registration_number", ""),
-            tax_id=data.get("tax_id", ""),
-            address=data.get("address", ""),
-            metadata=data.get("metadata"),
+            registration_number=data.get('registration_number', ''),
+            tax_id=data.get('tax_id', ''),
+            address=data.get('address', ''),
+            metadata=data.get('metadata'),
         )
 
         return ResponseProvider.success(**_onboarding_payload(onboarding))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("organization_country_onboarding_create_view: %s", e)
+        logger.exception('organization_country_onboarding_create_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
+@require_user_context(required_permission='onboarding.update')
 @require_POST
 def onboarding_upload_document_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
@@ -1243,54 +1132,45 @@ def onboarding_upload_document_view(request: ExtendedRequest, onboarding_id: str
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
 
-        document_type = data.get("document_type")
+        document_type = data.get('document_type')
         if not document_type or document_type not in DocumentType.values:
             return ResponseProvider.bad_request(
-                error="invalid_document_type",
-                message="Valid document_type is required."
+                error='invalid_document_type', message='Valid document_type is required.'
             )
 
-        file = files.get("file")
+        file = files.get('file')
         if not file:
-            return ResponseProvider.bad_request(
-                error="missing_file",
-                message="File is required."
-            )
+            return ResponseProvider.bad_request(error='missing_file', message='File is required.')
 
         doc = onboarding_service.upload_document(
             onboarding=onboarding,
             uploaded_by=request.system_user,
             document_type=document_type,
             file=file,
-            label=data.get("label", ""),
-            expires_at=data.get("expires_at"),
+            label=data.get('label', ''),
+            expires_at=data.get('expires_at'),
         )
 
         return ResponseProvider.success(**_document_payload(doc))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_upload_document_view: %s", e)
+        logger.exception('onboarding_upload_document_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
-@require_http_methods(["DELETE"])
+@require_user_context(required_permission='onboarding.update')
+@require_http_methods(['DELETE'])
 def onboarding_remove_document_view(request: ExtendedRequest, document_id: str) -> JsonResponse:
     try:
         document = _get_document(document_id)
         if not document:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding document not found."
+                error='not_found', message='Onboarding document not found.'
             )
 
         onboarding_service.remove_document(
@@ -1301,76 +1181,63 @@ def onboarding_remove_document_view(request: ExtendedRequest, document_id: str) 
         return ResponseProvider.success()
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_remove_document_view: %s", e)
+        logger.exception('onboarding_remove_document_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.review_document")
+@require_user_context(required_permission='onboarding.review_document')
 @require_POST
 def onboarding_review_document_view(request: ExtendedRequest, document_id: str) -> JsonResponse:
     try:
         data = request.data
         document = _get_document(document_id)
         if not document:
-            return ResponseProvider.not_found(
-                error="not_found",
-                message="Document not found."
-            )
+            return ResponseProvider.not_found(error='not_found', message='Document not found.')
 
         updated_doc = onboarding_service.review_document(
             document=document,
             reviewed_by=request.system_user,
-            approved=data.get("approved", False),
-            notes=data.get("notes", ""),
+            approved=data.get('approved', False),
+            notes=data.get('notes', ''),
         )
 
         return ResponseProvider.success(**_document_payload(updated_doc))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_review_document_view: %s", e)
+        logger.exception('onboarding_review_document_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.approve")
+@require_user_context(required_permission='onboarding.approve')
 @require_POST
 def onboarding_approve_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
 
         updated = onboarding_service.approve(
             onboarding=onboarding,
             performed_by=request.system_user,
-            internal_notes=request.data.get("internal_notes", ""),
+            internal_notes=request.data.get('internal_notes', ''),
         )
 
         return ResponseProvider.success(**_onboarding_payload(updated))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_approve_view: %s", e)
+        logger.exception('onboarding_approve_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.reject")
+@require_user_context(required_permission='onboarding.reject')
 @require_POST
 def onboarding_reject_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
@@ -1378,66 +1245,57 @@ def onboarding_reject_view(request: ExtendedRequest, onboarding_id: str) -> Json
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
 
         updated = onboarding_service.reject(
             onboarding=onboarding,
             performed_by=request.system_user,
-            reason=data.get("reason", ""),
-            applicant_notes=data.get("applicant_notes", ""),
-            internal_notes=data.get("internal_notes", ""),
+            reason=data.get('reason', ''),
+            applicant_notes=data.get('applicant_notes', ''),
+            internal_notes=data.get('internal_notes', ''),
         )
 
         return ResponseProvider.success(**_onboarding_payload(updated))
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_reject_view: %s", e)
+        logger.exception('onboarding_reject_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.complete")
+@require_user_context(required_permission='onboarding.complete')
 @require_POST
 def onboarding_complete_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
 
         org = onboarding_service.complete_onboarding(
-            onboarding=onboarding,
-            performed_by=request.system_user
+            onboarding=onboarding, performed_by=request.system_user
         )
 
         return ResponseProvider.success(
             onboarding=_onboarding_payload(onboarding),
             organization={
-                "id": str(org.id),
-                "name": org.name,
-                "slug": org.slug,
+                'id': str(org.id),
+                'name': org.name,
+                'slug': org.slug,
             },
         )
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_complete_view: %s", e)
+        logger.exception('onboarding_complete_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.add_note")
+@require_user_context(required_permission='onboarding.add_note')
 @require_POST
 def onboarding_add_note_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
@@ -1445,171 +1303,168 @@ def onboarding_add_note_view(request: ExtendedRequest, onboarding_id: str) -> Js
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
 
         activity = onboarding_service.add_note(
             onboarding=onboarding,
             performed_by=request.system_user,
-            note=data.get("note", ""),
-            internal=data.get("internal", False),
+            note=data.get('note', ''),
+            internal=data.get('internal', False),
         )
 
         return ResponseProvider.success(
             note={
-                "activity_id": str(activity.id),
-                "type": activity.activity_type,
-                "description": activity.description,
-                "internal": data.get("internal", False),
+                'activity_id': str(activity.id),
+                'type': activity.activity_type,
+                'description': activity.description,
+                'internal': data.get('internal', False),
             }
         )
 
     except OnboardingError as e:
-        return ResponseProvider.bad_request(
-            error="onboarding_error",
-            message=str(e)
-        )
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_add_note_view: %s", e)
+        logger.exception('onboarding_add_note_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.view")
+@require_user_context(required_permission='onboarding.view')
 @require_GET
 def onboarding_service_list_view(request: ExtendedRequest) -> JsonResponse:
     try:
-        qs = OnboardingServiceProduct.objects.filter(is_active=True).order_by("sort_order", "name")
-        if system_id := request.GET.get("system_id"):
+        qs = OnboardingServiceProduct.objects.filter(is_active=True).order_by('sort_order', 'name')
+        if system_id := request.GET.get('system_id'):
             qs = qs.filter(models.Q(system_id=system_id) | models.Q(system__isnull=True))
         return ResponseProvider.success(
             services=[_service_product_payload(service) for service in qs]
         )
     except Exception as e:
-        logger.exception("onboarding_service_list_view: %s", e)
+        logger.exception('onboarding_service_list_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
+@require_user_context(required_permission='onboarding.update')
 @require_POST
 def onboarding_select_services_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
         onboarding_service.set_selected_services(
             onboarding=onboarding,
             performed_by=request.system_user,
-            service_codes=request.data.get("service_codes") or request.data.get("services") or [],
+            service_codes=request.data.get('service_codes') or request.data.get('services') or [],
         )
         onboarding.refresh_from_db()
         return ResponseProvider.success(**_onboarding_payload(onboarding))
     except OnboardingError as e:
-        return ResponseProvider.bad_request(error="onboarding_error", message=str(e))
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_select_services_view: %s", e)
+        logger.exception('onboarding_select_services_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
+@require_user_context(required_permission='onboarding.update')
 @require_POST
 def onboarding_record_payment_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
         data = request.data
         payment = onboarding_service.record_payment(
             onboarding=onboarding,
             performed_by=request.system_user,
-            method=data.get("method", ""),
-            status=data.get("status", OnboardingPayment.Status.PENDING),
-            external_reference=data.get("external_reference", ""),
-            provider_payload=data.get("provider_payload"),
-            amount=data.get("amount"),
-            tax_amount=data.get("tax_amount"),
-            currency=data.get("currency", ""),
+            method=data.get('method', ''),
+            status=data.get('status', OnboardingPayment.Status.PENDING),
+            external_reference=data.get('external_reference', ''),
+            provider_payload=data.get('provider_payload'),
+            amount=data.get('amount'),
+            tax_amount=data.get('tax_amount'),
+            currency=data.get('currency', ''),
         )
-        return ResponseProvider.success(payment=_payment_payload(payment), onboarding=_onboarding_payload(onboarding))
+        return ResponseProvider.success(
+            payment=_payment_payload(payment), onboarding=_onboarding_payload(onboarding)
+        )
     except OnboardingError as e:
-        return ResponseProvider.bad_request(error="onboarding_error", message=str(e))
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_record_payment_view: %s", e)
+        logger.exception('onboarding_record_payment_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
+@require_user_context(required_permission='onboarding.update')
 @require_POST
-def onboarding_trigger_verifications_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
+def onboarding_trigger_verifications_view(
+    request: ExtendedRequest, onboarding_id: str
+) -> JsonResponse:
     try:
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
         runs = onboarding_service.trigger_verification_checks(
             onboarding=onboarding,
             performed_by=request.system_user,
-            trigger_mode=request.data.get("trigger_mode", OnboardingVerificationCheck.TriggerMode.MANUAL),
+            trigger_mode=request.data.get(
+                'trigger_mode', OnboardingVerificationCheck.TriggerMode.MANUAL
+            ),
         )
         return ResponseProvider.success(
             verification_runs=[_verification_run_payload(run) for run in runs],
             onboarding=_onboarding_payload(onboarding),
         )
     except OnboardingError as e:
-        return ResponseProvider.bad_request(error="onboarding_error", message=str(e))
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_trigger_verifications_view: %s", e)
+        logger.exception('onboarding_trigger_verifications_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.update")
+@require_user_context(required_permission='onboarding.update')
 @require_POST
 def onboarding_update_verification_run_view(request: ExtendedRequest, run_id: str) -> JsonResponse:
     try:
         run = _get_verification_run(run_id)
         if not run:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Verification run not found."
+                error='not_found', message='Verification run not found.'
             )
         data = request.data
         updated = onboarding_service.update_verification_run(
             run=run,
-            status=data.get("status", ""),
-            external_reference=data.get("external_reference", ""),
-            response_payload=data.get("response_payload"),
-            result_summary=data.get("result_summary", ""),
-            error_message=data.get("error_message", ""),
+            status=data.get('status', ''),
+            external_reference=data.get('external_reference', ''),
+            response_payload=data.get('response_payload'),
+            result_summary=data.get('result_summary', ''),
+            error_message=data.get('error_message', ''),
         )
         return ResponseProvider.success(**_verification_run_payload(updated))
     except OnboardingError as e:
-        return ResponseProvider.bad_request(error="onboarding_error", message=str(e))
+        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
     except Exception as e:
-        logger.exception("onboarding_update_verification_run_view: %s", e)
+        logger.exception('onboarding_update_verification_run_view: %s', e)
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission="onboarding.view")
+@require_user_context(required_permission='onboarding.view')
 @require_GET
 def onboarding_detail_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:
     try:
         onboarding = _get_onboarding(onboarding_id)
         if not onboarding:
             return ResponseProvider.not_found(
-                error="not_found",
-                message="Onboarding application not found."
+                error='not_found', message='Onboarding application not found.'
             )
 
         return ResponseProvider.success(**_onboarding_payload(onboarding))
 
     except Exception as e:
-        logger.exception("onboarding_detail_view: %s", e)
+        logger.exception('onboarding_detail_view: %s', e)
         return ResponseProvider.server_error()
