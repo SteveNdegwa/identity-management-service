@@ -1,5 +1,4 @@
 import secrets
-from typing import Optional
 
 import bcrypt
 from django.core.exceptions import ValidationError
@@ -30,7 +29,7 @@ class SystemAdminService:
         ).decode()
 
     @staticmethod
-    def _normalize_social_providers(providers: Optional[list]) -> Optional[list]:
+    def _normalize_social_providers(providers: list | None) -> list | None:
         if providers is None:
             return None
         try:
@@ -51,9 +50,9 @@ class SystemAdminService:
         *,
         realm: Realm,
         name: str,
-        slug: Optional[str] = None,
-        countries: Optional[list[Country]] = None,
-        performed_by: Optional[SystemUser] = None,
+        slug: str | None = None,
+        countries: list[Country] | None = None,
+        performed_by: SystemUser | None = None,
         **kwargs,
     ) -> System:
         clean_name = (name or "").strip()
@@ -96,27 +95,27 @@ class SystemAdminService:
         self,
         *,
         system: System,
-        performed_by: Optional[SystemUser] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        logo_url: Optional[str] = None,
-        website: Optional[str] = None,
-        password_type: Optional[str] = None,
-        allow_password_login: Optional[bool] = None,
-        allow_passwordless_login: Optional[bool] = None,
-        allow_magic_link_login: Optional[bool] = None,
-        allow_social_login: Optional[bool] = None,
-        passwordless_only: Optional[bool] = None,
-        allowed_social_providers: Optional[list] = None,
-        registration_open: Optional[bool] = None,
-        auto_login_after_registration: Optional[bool] = None,
-        requires_approval: Optional[bool] = None,
-        allows_referrals: Optional[bool] = None,
+        performed_by: SystemUser | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        logo_url: str | None = None,
+        website: str | None = None,
+        password_type: str | None = None,
+        allow_password_login: bool | None = None,
+        allow_passwordless_login: bool | None = None,
+        allow_magic_link_login: bool | None = None,
+        allow_social_login: bool | None = None,
+        passwordless_only: bool | None = None,
+        allowed_social_providers: list | None = None,
+        registration_open: bool | None = None,
+        auto_login_after_registration: bool | None = None,
+        requires_approval: bool | None = None,
+        allows_referrals: bool | None = None,
         referral_reward_amount = None,
-        auto_verify_referrals: Optional[bool] = None,
-        mfa_required: Optional[bool] = None,
-        mfa_required_enforced: Optional[bool] = None,
-        allowed_mfa_methods: Optional[list] = None,
+        auto_verify_referrals: bool | None = None,
+        mfa_required: bool | None = None,
+        mfa_required_enforced: bool | None = None,
+        allowed_mfa_methods: list | None = None,
     ) -> System:
         updated = []
 
@@ -211,7 +210,7 @@ class SystemAdminService:
         self,
         *,
         system: System,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
     ) -> System:
         if not system.is_active:
             raise SystemAdminServiceError("System is already inactive.")
@@ -232,7 +231,7 @@ class SystemAdminService:
         self,
         *,
         system: System,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
     ) -> System:
         if system.is_active:
             raise SystemAdminServiceError("System is already active.")
@@ -254,7 +253,7 @@ class SystemAdminService:
         *,
         system: System,
         country: Country,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
     ) -> Country:
         if system.available_countries.filter(id=country.id).exists():
             raise SystemAdminServiceError(
@@ -276,7 +275,7 @@ class SystemAdminService:
         *,
         system: System,
         country: Country,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
     ) -> Country:
         if not system.available_countries.filter(id=country.id).exists():
             raise SystemAdminServiceError(
@@ -298,11 +297,11 @@ class SystemAdminService:
         *,
         system: System,
         name: str,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
         client_type: str = SystemClient.ClientType.CONFIDENTIAL,
-        redirect_uris: Optional[list] = None,
-        logout_uris: Optional[list] = None,
-        allowed_scopes: Optional[list] = None,
+        redirect_uris: list | None = None,
+        logout_uris: list | None = None,
+        allowed_scopes: list | None = None,
         access_token_ttl: int = 0,
         refresh_token_ttl: int = 0,
         id_token_ttl: int = 0,
@@ -358,7 +357,7 @@ class SystemAdminService:
         self,
         *,
         client: SystemClient,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
     ) -> tuple[SystemClient, str]:
         if client.client_type == SystemClient.ClientType.PUBLIC:
             raise SystemAdminServiceError("Public clients do not use client secrets.")
@@ -380,15 +379,15 @@ class SystemAdminService:
         self,
         *,
         client: SystemClient,
-        performed_by: Optional[SystemUser] = None,
-        name: Optional[str] = None,
-        client_type: Optional[str] = None,
-        redirect_uris: Optional[list] = None,
-        logout_uris: Optional[list] = None,
-        allowed_scopes: Optional[list] = None,
-        access_token_ttl: Optional[int] = None,
-        refresh_token_ttl: Optional[int] = None,
-        id_token_ttl: Optional[int] = None,
+        performed_by: SystemUser | None = None,
+        name: str | None = None,
+        client_type: str | None = None,
+        redirect_uris: list | None = None,
+        logout_uris: list | None = None,
+        allowed_scopes: list | None = None,
+        access_token_ttl: int | None = None,
+        refresh_token_ttl: int | None = None,
+        id_token_ttl: int | None = None,
         override_allow_passwordless_login=None,
         override_allow_magic_link_login=None,
         override_allow_social_login=None,
@@ -454,7 +453,7 @@ class SystemAdminService:
         self,
         *,
         client: SystemClient,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
     ) -> SystemClient:
         if not client.is_active:
             raise SystemAdminServiceError("Client is already inactive.")
@@ -474,7 +473,7 @@ class SystemAdminService:
         self,
         *,
         client: SystemClient,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
     ) -> SystemClient:
         if client.is_active:
             raise SystemAdminServiceError("Client is already active.")
@@ -496,7 +495,7 @@ class SystemAdminService:
         system: System,
         key: str,
         value: str,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
         value_type: str = SystemSettings.ValueType.STRING,
         description: str = "",
         is_secret: bool = False,

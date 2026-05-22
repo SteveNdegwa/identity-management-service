@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import random
-from typing import Optional, Any
+from typing import Any
 
 import bcrypt
 
@@ -42,7 +42,7 @@ def get_client_ip(request):
     return request.META.get('REMOTE_ADDR')
 
 
-def sanitize_data(data: Optional[dict]) -> Optional[dict]:
+def sanitize_data(data: dict | None) -> dict | None:
     sensitive_keys = {"password", "old_password", "new_password"}
     if data is None:
         return None

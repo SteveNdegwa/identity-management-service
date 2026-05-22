@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from typing import Optional
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -46,7 +45,7 @@ referral_service = ReferralService()
 sso_service = SSOService()
 
 
-def _get_system(data: dict) -> Optional[System]:
+def _get_system(data: dict) -> System | None:
     sid = data.get("system_id") or data.get("system")
     if not sid:
         return None
@@ -56,7 +55,7 @@ def _get_system(data: dict) -> Optional[System]:
         return None
 
 
-def _get_role(data: dict, system: System) -> Optional[Role]:
+def _get_role(data: dict, system: System) -> Role | None:
     rid = data.get("role_id") or data.get("role")
     if not rid:
         return None
@@ -66,11 +65,11 @@ def _get_role(data: dict, system: System) -> Optional[Role]:
         return None
 
 
-def _get_country(data: dict) -> Optional[Country]:
+def _get_country(data: dict) -> Country | None:
     return get_country_from_data(data)
 
 
-def _get_organization(data: dict) -> Optional[Organization]:
+def _get_organization(data: dict) -> Organization | None:
     oid = data.get("organization_id") or data.get("organization")
     if not oid:
         return None
@@ -80,7 +79,7 @@ def _get_organization(data: dict) -> Optional[Organization]:
         return None
 
 
-def _get_client(data: dict) -> Optional[SystemClient]:
+def _get_client(data: dict) -> SystemClient | None:
     client_id = data.get("client_id")
     if not client_id:
         return None
@@ -90,7 +89,7 @@ def _get_client(data: dict) -> Optional[SystemClient]:
         return None
 
 
-def _parse_bool_query(value: Optional[str]) -> Optional[bool]:
+def _parse_bool_query(value: str | None) -> bool | None:
     if value is None or value == "":
         return None
     lowered = value.lower()
@@ -101,7 +100,7 @@ def _parse_bool_query(value: Optional[str]) -> Optional[bool]:
     return None
 
 
-def _parse_datetime_query(value: Optional[str]) -> Optional[datetime]:
+def _parse_datetime_query(value: str | None) -> datetime | None:
     if not value:
         return None
     return datetime.fromisoformat(value)

@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from django.db import models
 from django.http import JsonResponse
@@ -35,7 +34,7 @@ organization_service = OrganizationService()
 onboarding_service = OnboardingService()
 
 
-def _get_system(data: dict) -> Optional[System]:
+def _get_system(data: dict) -> System | None:
     sid = data.get("system_id") or data.get("system")
     if not sid:
         return None
@@ -45,7 +44,7 @@ def _get_system(data: dict) -> Optional[System]:
         return None
 
 
-def _get_organization(organization_id: str) -> Optional[Organization]:
+def _get_organization(organization_id: str) -> Organization | None:
     try:
         return Organization.objects.select_related(
             "system", "onboarding"
@@ -54,14 +53,14 @@ def _get_organization(organization_id: str) -> Optional[Organization]:
         return None
 
 
-def _get_organization_from_data(data: dict) -> Optional[Organization]:
+def _get_organization_from_data(data: dict) -> Organization | None:
     organization_id = data.get("organization_id") or data.get("organization")
     if not organization_id:
         return None
     return _get_organization(organization_id)
 
 
-def _get_org_country(org_country_id: str) -> Optional[OrganizationCountry]:
+def _get_org_country(org_country_id: str) -> OrganizationCountry | None:
     try:
         return OrganizationCountry.objects.select_related(
             "organization", "country", "approved_by", "source_onboarding"
@@ -70,7 +69,7 @@ def _get_org_country(org_country_id: str) -> Optional[OrganizationCountry]:
         return None
 
 
-def _get_branch(branch_id: str) -> Optional[Branch]:
+def _get_branch(branch_id: str) -> Branch | None:
     try:
         return Branch.objects.select_related(
             "organization", "country", "parent"
@@ -79,11 +78,11 @@ def _get_branch(branch_id: str) -> Optional[Branch]:
         return None
 
 
-def _get_country(data: dict) -> Optional[Country]:
+def _get_country(data: dict) -> Country | None:
     return get_country_from_data(data)
 
 
-def _get_onboarding(onboarding_id: str) -> Optional[OrganizationOnboarding]:
+def _get_onboarding(onboarding_id: str) -> OrganizationOnboarding | None:
     try:
         return OrganizationOnboarding.objects.select_related(
             "system", "contact_system_user", "created_organization", "organization"
@@ -92,7 +91,7 @@ def _get_onboarding(onboarding_id: str) -> Optional[OrganizationOnboarding]:
         return None
 
 
-def _get_document(document_id: str) -> Optional[OnboardingDocument]:
+def _get_document(document_id: str) -> OnboardingDocument | None:
     try:
         return OnboardingDocument.objects.select_related(
             "onboarding", "uploaded_by"
@@ -101,7 +100,7 @@ def _get_document(document_id: str) -> Optional[OnboardingDocument]:
         return None
 
 
-def _get_verification_run(run_id: str) -> Optional[OnboardingVerificationRun]:
+def _get_verification_run(run_id: str) -> OnboardingVerificationRun | None:
     try:
         return OnboardingVerificationRun.objects.select_related(
             "onboarding", "verification_check", "triggered_by"
@@ -110,7 +109,7 @@ def _get_verification_run(run_id: str) -> Optional[OnboardingVerificationRun]:
         return None
 
 
-def _get_onboarding_country(country_request_id: str) -> Optional[OrganizationOnboardingCountry]:
+def _get_onboarding_country(country_request_id: str) -> OrganizationOnboardingCountry | None:
     try:
         return OrganizationOnboardingCountry.objects.select_related(
             "onboarding", "onboarding__system", "onboarding__country", "country"
@@ -334,7 +333,7 @@ def _verification_run_payload(run: OnboardingVerificationRun) -> dict:
     }
 
 
-def _onboarding_steps(onboarding: OrganizationOnboarding, latest_payment: Optional[OnboardingPayment]) -> list[dict]:
+def _onboarding_steps(onboarding: OrganizationOnboarding, latest_payment: OnboardingPayment | None) -> list[dict]:
     documents = list(onboarding.documents.all())
     details_done = bool(onboarding.legal_name and onboarding.country_requests.exists() and documents)
     document_verification_done = bool(documents) and all(doc.status == "approved" for doc in documents)

@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Iterable
 
 from django.core.exceptions import ValidationError
 
@@ -21,7 +21,7 @@ def _country_lookup(value: str):
         return None
 
 
-def country_value_from_data(data: dict) -> Optional[str]:
+def country_value_from_data(data: dict) -> str | None:
     return data.get("country_id") or data.get("country_code") or data.get("country")
 
 

@@ -1,11 +1,11 @@
 import functools
-from typing import Optional, Union
+from typing import Union
 
 from utils.extended_request import ExtendedRequest
 from utils.response_provider import ResponseProvider
 
 
-def require_user_context(required_permission: Optional[Union[str, list[str]]] = None):
+def require_user_context(required_permission: Union[str, list[str]] | None = None):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(request: ExtendedRequest, *args, **kwargs):

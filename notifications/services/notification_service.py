@@ -1,4 +1,3 @@
-from typing import Optional
 
 from accounts.models import IdentifierType
 from systems.models import System
@@ -11,7 +10,7 @@ class NotificationService:
             identifier_type: str,
             value: str,
             raw_code: str,
-            system: Optional[System] = None,
+            system: System | None = None,
     ) -> None:
         # TODO: DELIVER OTP LOGIC
         print(raw_code)
@@ -28,8 +27,8 @@ class NotificationService:
             identifier_type: str,
             value: str,
             raw_code: str,
-            system: Optional[System] = None,
-            delivery_target: Optional[str] = None,
+            system: System | None = None,
+            delivery_target: str | None = None,
     ) -> None:
         target = delivery_target or value
         cls.deliver_otp_to_value(
@@ -45,7 +44,7 @@ class NotificationService:
             identifier_type: str,
             value: str,
             raw_token: str,
-            system: Optional[System] = None,
+            system: System | None = None,
     ) -> None:
         # TODO: DELIVER VERIFICATION LINK LOGIC
         if identifier_type not in (IdentifierType.PHONE, IdentifierType.EMAIL):

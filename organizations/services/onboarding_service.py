@@ -1,6 +1,5 @@
 import datetime
 from decimal import Decimal
-from typing import Optional
 
 from django.core.files.uploadedfile import UploadedFile
 from django.db import models, transaction
@@ -47,18 +46,18 @@ class OnboardingService:
         countries: list[dict],
         legal_name: str,
         documents: DocumentInput,
-        organization: Optional[Organization] = None,
+        organization: Organization | None = None,
         trading_name: str = "",
         organization_type: str = "",
-        products_needed: Optional[list[str]] = None,
+        products_needed: list[str] | None = None,
         monthly_transaction_volume: str = "",
         staff_size: str = "",
-        pain_points: Optional[list[str]] = None,
+        pain_points: list[str] | None = None,
         contact_email: str = "",
         contact_phone: str = "",
         website: str = "",
         description: str = "",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> OrganizationOnboarding:
         if not legal_name.strip():
             raise OnboardingError("Legal name is required.")
@@ -232,7 +231,7 @@ class OnboardingService:
         registration_number: str = "",
         tax_id: str = "",
         address: str = "",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> OrganizationOnboardingCountry:
         if not onboarding.is_editable_by_applicant:
             raise OnboardingError(f"Application cannot be edited in status '{onboarding.status}'.")
@@ -270,11 +269,11 @@ class OnboardingService:
         self,
         country_request: OrganizationOnboardingCountry,
         performed_by: SystemUser,
-        country: Optional[Country] = None,
-        registration_number: Optional[str] = None,
-        tax_id: Optional[str] = None,
-        address: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        country: Country | None = None,
+        registration_number: str | None = None,
+        tax_id: str | None = None,
+        address: str | None = None,
+        metadata: dict | None = None,
     ) -> OrganizationOnboardingCountry:
         onboarding = country_request.onboarding
         if not onboarding.is_editable_by_applicant:
@@ -325,7 +324,7 @@ class OnboardingService:
         registration_number: str = "",
         tax_id: str = "",
         address: str = "",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> OrganizationOnboarding:
         if organization.system_id != contact_system_user.system_id:
             raise OnboardingError("Organization does not belong to this system user.")
@@ -546,7 +545,7 @@ class OnboardingService:
             document_type: str,
             file: UploadedFile,
             label: str = "",
-            expires_at: Optional[datetime.datetime]=None,
+            expires_at: datetime.datetime | None=None,
     ) -> OnboardingDocument:
         if not onboarding.is_editable_by_applicant:
             raise OnboardingError(f"Documents cannot be uploaded in status '{onboarding.status}'.")
@@ -621,14 +620,14 @@ class OnboardingService:
     def record_payment(
         self,
         onboarding: OrganizationOnboarding,
-        performed_by: Optional[SystemUser],
+        performed_by: SystemUser | None,
         *,
         method: str,
         status: str,
         external_reference: str = "",
-        provider_payload: Optional[dict] = None,
-        amount: Optional[Decimal] = None,
-        tax_amount: Optional[Decimal] = None,
+        provider_payload: dict | None = None,
+        amount: Decimal | None = None,
+        tax_amount: Decimal | None = None,
         currency: str = "",
     ) -> OnboardingPayment:
         if status not in OnboardingPayment.Status.values:
@@ -692,7 +691,7 @@ class OnboardingService:
     def trigger_verification_checks(
         self,
         onboarding: OrganizationOnboarding,
-        performed_by: Optional[SystemUser],
+        performed_by: SystemUser | None,
         trigger_mode: str = OnboardingVerificationCheck.TriggerMode.MANUAL,
     ) -> list[OnboardingVerificationRun]:
         checks = OnboardingVerificationCheck.objects.filter(
@@ -730,7 +729,7 @@ class OnboardingService:
         *,
         status: str,
         external_reference: str = "",
-        response_payload: Optional[dict] = None,
+        response_payload: dict | None = None,
         result_summary: str = "",
         error_message: str = "",
     ) -> OnboardingVerificationRun:
@@ -881,8 +880,8 @@ class OnboardingService:
         document_type: str,
         file: UploadedFile,
         label: str = "",
-        expires_at: Optional[datetime.datetime] = None,
-        replaces: Optional[OnboardingDocument] = None,
+        expires_at: datetime.datetime | None = None,
+        replaces: OnboardingDocument | None = None,
     )->OnboardingDocument:
         if hasattr(file, "seek"):
             file.seek(0)
@@ -907,7 +906,7 @@ class OnboardingService:
         registration_number: str = "",
         tax_id: str = "",
         address: str = "",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> OrganizationOnboardingCountry:
         return OrganizationOnboardingCountry.objects.create(
             onboarding=onboarding,
@@ -954,8 +953,8 @@ class OnboardingService:
         system: System,
         country: Country,
         contact_system_user: SystemUser,
-        organization: Optional[Organization] = None,
-        exclude_onboarding_ids: Optional[list] = None,
+        organization: Organization | None = None,
+        exclude_onboarding_ids: list | None = None,
     ) -> None:
         existing_country_requests = OrganizationOnboardingCountry.objects.filter(
             onboarding__system=system,
@@ -993,12 +992,12 @@ class OnboardingService:
     def _log(
         onboarding: OrganizationOnboarding,
         activity_type: str,
-        performed_by: Optional[SystemUser] = None,
+        performed_by: SystemUser | None = None,
         description: str = "",
         previous_status: str = "",
         new_status: str = "",
-        document: Optional[OnboardingDocument] = None,
-        payload: Optional[dict] = None,
+        document: OnboardingDocument | None = None,
+        payload: dict | None = None,
     )->OnboardingActivity:
         return OnboardingActivity.objects.create(
             onboarding=onboarding,

@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
@@ -20,18 +19,18 @@ logger = logging.getLogger(__name__)
 system_service = SystemAdminService()
 
 
-def _get_system(system_id: str) -> Optional[System]:
+def _get_system(system_id: str) -> System | None:
     try:
         return System.objects.prefetch_related("available_countries").get(id=system_id)
     except System.DoesNotExist:
         return None
 
 
-def _get_country(data: dict) -> Optional[Country]:
+def _get_country(data: dict) -> Country | None:
     return get_country_from_data(data)
 
 
-def _get_realm(data: dict) -> Optional[Realm]:
+def _get_realm(data: dict) -> Realm | None:
     realm_id = data.get("realm_id") or data.get("realm")
     if not realm_id:
         return None
@@ -41,14 +40,14 @@ def _get_realm(data: dict) -> Optional[Realm]:
         return None
 
 
-def _get_client(client_id: str) -> Optional[SystemClient]:
+def _get_client(client_id: str) -> SystemClient | None:
     try:
         return SystemClient.objects.select_related("system").get(id=client_id)
     except SystemClient.DoesNotExist:
         return None
 
 
-def _get_setting(setting_id: str) -> Optional[SystemSettings]:
+def _get_setting(setting_id: str) -> SystemSettings | None:
     try:
         return SystemSettings.objects.select_related("system").get(id=setting_id)
     except SystemSettings.DoesNotExist:

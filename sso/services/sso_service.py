@@ -1189,7 +1189,7 @@ class SSOService:
         return result
 
     @staticmethod
-    def _mfa_destination(user: User, method: str) -> Tuple[str, str]:
+    def _mfa_destination(user: User, method: str) -> tuple[str, str]:
         if method == MFAMethod.EMAIL:
             if not user.email_verified:
                 raise AuthenticationError("Email address is not verified.")

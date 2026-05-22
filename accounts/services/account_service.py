@@ -1,6 +1,5 @@
 import secrets
 from datetime import timedelta
-from typing import Optional
 
 import bcrypt
 from django.db import transaction
@@ -284,7 +283,7 @@ class AccountService:
                     require_email_verification=False,
                 )
             except SelfRegistrationError as exc:
-                raise ClaimError(str(exc))
+                raise ClaimError(str(exc)) from exc
 
             if phone_user:
                 user = phone_user
@@ -347,14 +346,14 @@ class AccountService:
             display_name: str = "",
             date_of_birth=None,
             gender: str = Gender.OTHER,
-            email: Optional[str] = None,
-            phone_number: Optional[str] = None,
-            password: Optional[str] = None,
-            pin: Optional[str] = None,
-            email_verification_id: Optional[str] = None,
-            phone_verification_id: Optional[str] = None,
-            primary_country: Optional[Country] = None,
-            referral_code: Optional[str] = None,
+            email: str | None = None,
+            phone_number: str | None = None,
+            password: str | None = None,
+            pin: str | None = None,
+            email_verification_id: str | None = None,
+            phone_verification_id: str | None = None,
+            primary_country: Country | None = None,
+            referral_code: str | None = None,
             ip_address: str = "",
     ) -> tuple[User, SystemUser]:
         if not system.registration_open:
@@ -427,8 +426,8 @@ class AccountService:
             self,
             existing_user: User,
             system: System,
-            primary_country: Optional[Country] = None,
-            referral_code: Optional[str] = None,
+            primary_country: Country | None = None,
+            referral_code: str | None = None,
             ip_address: str = "",
     ) -> tuple[User, SystemUser]:
         if existing_user.realm_id and existing_user.realm_id != system.realm_id:
@@ -471,15 +470,15 @@ class AccountService:
             display_name: str = "",
             date_of_birth=None,
             gender: str = Gender.OTHER,
-            email: Optional[str] = None,
-            phone_number: Optional[str] = None,
+            email: str | None = None,
+            phone_number: str | None = None,
             access_token: str = "",
             refresh_token: str = "",
-            extra_data: Optional[dict] = None,
-            email_verification_id: Optional[str] = None,
-            phone_verification_id: Optional[str] = None,
-            primary_country: Optional[Country] = None,
-            referral_code: Optional[str] = None,
+            extra_data: dict | None = None,
+            email_verification_id: str | None = None,
+            phone_verification_id: str | None = None,
+            primary_country: Country | None = None,
+            referral_code: str | None = None,
             ip_address: str = "",
     ) -> tuple[User, SystemUser]:
         if not system.registration_open:
@@ -599,9 +598,9 @@ class AccountService:
             uid: str,
             access_token: str = "",
             refresh_token: str = "",
-            extra_data: Optional[dict] = None,
-            primary_country: Optional[Country] = None,
-            referral_code: Optional[str] = None,
+            extra_data: dict | None = None,
+            primary_country: Country | None = None,
+            referral_code: str | None = None,
             ip_address: str = "",
     ) -> tuple[User, SystemUser]:
         provider = self._validate_social_provider_for_system(system, provider)
@@ -781,7 +780,7 @@ class AccountService:
             uid: str,
             access_token: str = "",
             refresh_token: str = "",
-            extra_data: Optional[dict] = None,
+            extra_data: dict | None = None,
     ) -> SocialAccount:
         provider = self._validate_social_provider(provider)
 
@@ -805,9 +804,9 @@ class AccountService:
     @staticmethod
     def _resolve_credentials(
             system: System,
-            password: Optional[str],
-            pin: Optional[str]
-    ) -> tuple[Optional[str], Optional[str]]:
+            password: str | None,
+            pin: str | None
+    ) -> tuple[str | None, str | None]:
         if system.passwordless_only:
             return None, None
 
@@ -827,8 +826,8 @@ class AccountService:
             self,
             email: str,
             phone_number: str,
-            email_verification_id: Optional[str],
-            phone_verification_id: Optional[str],
+            email_verification_id: str | None,
+            phone_verification_id: str | None,
             require_email_verification: bool = True,
     ) -> dict:
         verified = {}
@@ -914,7 +913,7 @@ class AccountService:
         #     raise SelfRegistrationError("Gender is required.")
 
     @staticmethod
-    def _require_email_and_phone(email: Optional[str], phone_number: Optional[str]) -> tuple[str, str]:
+    def _require_email_and_phone(email: str | None, phone_number: str | None) -> tuple[str, str]:
         email = (email or "").strip().lower()
         phone_number = (phone_number or "").strip()
         if not email:
@@ -928,7 +927,7 @@ class AccountService:
             realm: Realm,
             email: str,
             phone_number: str
-    ) -> tuple[Optional[User], Optional[str]]:
+    ) -> tuple[User | None, str | None]:
         try:
             return (
                 User.objects.get_by_identifier(realm, email, IdentifierType.EMAIL),
@@ -946,14 +945,14 @@ class AccountService:
         return None, None
 
     @staticmethod
-    def _find_user_by_email(email: str, realm: Realm) -> Optional[User]:
+    def _find_user_by_email(email: str, realm: Realm) -> User | None:
         try:
             return User.objects.get_by_identifier(realm, email, IdentifierType.EMAIL)
         except User.DoesNotExist:
             return None
 
     @staticmethod
-    def _find_user_by_phone(phone_number: str, realm: Realm) -> Optional[User]:
+    def _find_user_by_phone(phone_number: str, realm: Realm) -> User | None:
         try:
             return User.objects.get_by_identifier(realm, phone_number, IdentifierType.PHONE)
         except User.DoesNotExist:
@@ -981,8 +980,8 @@ class AccountService:
     def _ensure_credentials_if_needed(
             user: User,
             system: System,
-            password: Optional[str],
-            pin: Optional[str],
+            password: str | None,
+            pin: str | None,
     ) -> None:
         updated = []
         if (
@@ -1013,8 +1012,8 @@ class AccountService:
             user: User,
             system: System,
             role: Role,
-            organization: Optional[Organization] = None,
-            primary_country: Optional[Country] = None,
+            organization: Organization | None = None,
+            primary_country: Country | None = None,
     ) -> SystemUser:
         defaults = {
             "organization": organization,
@@ -1036,7 +1035,7 @@ class AccountService:
 
         return system_user
 
-    def _attach_referral_if_present(self, system_user: SystemUser, referral_code: Optional[str]) -> None:
+    def _attach_referral_if_present(self, system_user: SystemUser, referral_code: str | None) -> None:
         if not referral_code:
             return
         try:
@@ -1106,12 +1105,12 @@ class AccountService:
     @staticmethod
     def _audit(
             event_type: str,
-            actor_user: Optional[User] = None,
-            actor_system_user: Optional[SystemUser] = None,
+            actor_user: User | None = None,
+            actor_system_user: SystemUser | None = None,
             subject=None,
             ip: str = "",
             identifier_type: str = "",
-            payload: Optional[dict] = None,
+            payload: dict | None = None,
             outcome: str = "success",
     ):
         AuditLog.objects.create(
