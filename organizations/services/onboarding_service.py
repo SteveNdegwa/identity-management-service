@@ -1,6 +1,7 @@
 import datetime
 from decimal import Decimal
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.uploadedfile import UploadedFile
 from django.db import models, transaction
 from django.utils import timezone
@@ -503,10 +504,15 @@ class OnboardingService:
         if not self.has_successful_payment(onboarding):
             raise OnboardingError('Onboarding fee must be paid before completing onboarding.')
 
-        if onboarding.organization_id and onboarding.created_organization_id:
+        try:
+            created_organization = onboarding.created_organization
+        except ObjectDoesNotExist:
+            created_organization = None
+
+        if onboarding.organization_id and created_organization:
             return onboarding.organization
-        if onboarding.created_organization_id:
-            return onboarding.created_organization
+        if created_organization:
+            return created_organization
 
         if onboarding.organization_id:
             org = onboarding.organization

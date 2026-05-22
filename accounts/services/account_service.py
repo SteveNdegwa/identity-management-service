@@ -365,13 +365,15 @@ class AccountService:
         email_verification_id: str | None = None,
         phone_verification_id: str | None = None,
         primary_country: Country | None = None,
+        role: Role | None = None,
         referral_code: str | None = None,
         ip_address: str = '',
     ) -> tuple[User, SystemUser]:
         if not system.registration_open:
             raise RegistrationClosedError('This system does not allow self-registration.')
 
-        if not system.default_role:
+        role = role or system.default_role
+        if not role:
             raise SelfRegistrationError('Default role not set for this system.')
 
         self._validate_required_profile(first_name, last_name, date_of_birth, gender)
@@ -419,7 +421,7 @@ class AccountService:
         system_user = self._create_system_user_record(
             user=user,
             system=system,
-            role=system.default_role,
+            role=role,
             primary_country=primary_country,
         )
         self._attach_referral_if_present(system_user, referral_code)
@@ -492,6 +494,7 @@ class AccountService:
         email_verification_id: str | None = None,
         phone_verification_id: str | None = None,
         primary_country: Country | None = None,
+        organization: Organization | None = None,
         referral_code: str | None = None,
         ip_address: str = '',
     ) -> tuple[User, SystemUser]:
@@ -540,6 +543,7 @@ class AccountService:
                 refresh_token=refresh_token,
                 extra_data=extra_data,
                 primary_country=primary_country,
+                organization=organization,
                 referral_code=referral_code,
                 ip_address=ip_address,
             )
@@ -584,6 +588,7 @@ class AccountService:
             user=user,
             system=system,
             role=role,
+            organization=organization,
             primary_country=primary_country,
         )
 
@@ -614,6 +619,7 @@ class AccountService:
         refresh_token: str = '',
         extra_data: dict | None = None,
         primary_country: Country | None = None,
+        organization: Organization | None = None,
         referral_code: str | None = None,
         ip_address: str = '',
     ) -> tuple[User, SystemUser]:
@@ -643,6 +649,7 @@ class AccountService:
             user=existing_user,
             system=system,
             role=role,
+            organization=organization,
             primary_country=primary_country,
         )
 
