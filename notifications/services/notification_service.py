@@ -14,11 +14,11 @@ class NotificationService:
         identifier_type: str,
         value: str,
         raw_code: str,
-        system: System,
+        system: System | None = None,
     ) -> None:
         context = {
             'code': raw_code,
-            'system_name': system.name,
+            'system_name': system.name if system else 'Spin Mobile',
             'year': datetime.datetime.now().year,
             'expiry_minutes': 5,
         }
@@ -45,11 +45,11 @@ class NotificationService:
         identifier_type: str,
         value: str,
         raw_token: str,
-        system: System,
+        system: System | None = None,
     ) -> None:
         context = {
             'action_url': raw_token,  # TODO: APPEND BASE URL
-            'system_name': system.name,
+            'system_name': system.name if system else 'Spin Mobile',
             'year': datetime.datetime.now().year,
         }
 
@@ -75,11 +75,11 @@ class NotificationService:
         identifier_type: str,
         value: str,
         raw_token: str,
-        system: System,
+        system: System | None = None,
     ) -> None:
         context = {
             'action_url': raw_token,  # TODO: APPEND BASE URL
-            'system_name': system.name,
+            'system_name': system.name if system else 'Spin Mobile',
             'year': datetime.datetime.now().year,
         }
 
