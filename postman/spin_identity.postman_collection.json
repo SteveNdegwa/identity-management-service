@@ -1699,49 +1699,6 @@
           }
         },
         {
-          "name": "Create Country Onboarding for Organization",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": "{{baseUrl}}/api/organizations/{{organizationId}}/countries/onboarding/",
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "country_id",
-                  "value": "{{countryId}}",
-                  "type": "text"
-                },
-                {
-                  "key": "registration_number",
-                  "value": "REG-NEW",
-                  "type": "text"
-                },
-                {
-                  "key": "tax_id",
-                  "value": "TAX-NEW",
-                  "type": "text"
-                },
-                {
-                  "key": "address",
-                  "value": "Nairobi, Kenya",
-                  "type": "text"
-                },
-                {
-                  "key": "documents",
-                  "type": "file",
-                  "src": ""
-                }
-              ]
-            }
-          }
-        },
-        {
           "name": "Remove Onboarding Document",
           "request": {
             "method": "DELETE",
