@@ -1085,43 +1085,6 @@ def onboarding_country_remove_view(
         return ResponseProvider.server_error()
 
 
-@require_user_context(required_permission='onboarding.create')
-@require_POST
-def organization_country_onboarding_create_view(
-    request: ExtendedRequest, organization_id: str
-) -> JsonResponse:
-    try:
-        data = request.data
-        org = _get_organization(organization_id)
-        if not org:
-            return ResponseProvider.not_found(error='not_found', message='Organization not found.')
-
-        country = _get_country(data)
-        if not country:
-            return ResponseProvider.bad_request(
-                error='invalid_country', message='Country not found.'
-            )
-
-        onboarding = onboarding_service.create_country_application_for_onboarded_organization(
-            organization=org,
-            contact_system_user=request.system_user,
-            country=country,
-            documents=request.FILES,
-            registration_number=data.get('registration_number', ''),
-            tax_id=data.get('tax_id', ''),
-            address=data.get('address', ''),
-            metadata=data.get('metadata'),
-        )
-
-        return ResponseProvider.success(**_onboarding_payload(onboarding))
-
-    except OnboardingError as e:
-        return ResponseProvider.bad_request(error='onboarding_error', message=str(e))
-    except Exception as e:
-        logger.exception('organization_country_onboarding_create_view: %s', e)
-        return ResponseProvider.server_error()
-
-
 @require_user_context(required_permission='onboarding.update')
 @require_POST
 def onboarding_upload_document_view(request: ExtendedRequest, onboarding_id: str) -> JsonResponse:

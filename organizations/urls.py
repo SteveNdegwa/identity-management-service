@@ -115,11 +115,6 @@ urlpatterns = [
     path(
         '<str:organization_id>/countries/add/', views.org_country_add_view, name='org-country-add'
     ),
-    path(
-        '<str:organization_id>/countries/onboarding/',
-        views.organization_country_onboarding_create_view,
-        name='organization-country-onboarding-create',
-    ),
     # Branches
     path('<str:organization_id>/branches/', views.branch_list_view, name='branch-list'),
     path('<str:organization_id>/branches/create/', views.branch_create_view, name='branch-create'),

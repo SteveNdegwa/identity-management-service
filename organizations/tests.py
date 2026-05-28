@@ -14,6 +14,7 @@ from organizations.models import (
     OrganizationOnboardingCountry,
 )
 from organizations.services.onboarding_service import OnboardingError, OnboardingService
+from organizations.services.organization_service import OrganizationService
 from permissions.models import Role
 from systems.models import System
 
@@ -281,7 +282,7 @@ class OnboardingServiceTests(TestCase):
         self.assertEqual(org_country.approval_status, OrganizationCountry.ApprovalStatus.APPROVED)
         self.assertEqual(org_country.source_onboarding, onboarding)
 
-    def test_complete_onboarding_can_add_later_country_to_existing_org(self):
+    def test_onboarded_organization_country_is_created_directly(self):
         first_onboarding = self.service.create_application(
             system=self.system,
             contact_system_user=self.system_user,
@@ -296,23 +297,16 @@ class OnboardingServiceTests(TestCase):
         self._pay_onboarding(first_onboarding)
         organization = self.service.complete_onboarding(first_onboarding, self.system_user)
 
-        second_onboarding = self.service.create_country_application_for_onboarded_organization(
+        uganda = OrganizationService().add_country(
             organization=organization,
-            contact_system_user=self.system_user,
             country=self.country_ug,
+            performed_by=self.system_user,
             registration_number='UG-1',
             tax_id='URA-1',
-            documents=self._documents(),
-        )
-        self._approve_documents(second_onboarding)
-        self.service.approve(second_onboarding, self.system_user)
-        self._pay_onboarding(second_onboarding)
-        returned_organization = self.service.complete_onboarding(
-            second_onboarding, self.system_user
         )
 
-        self.assertEqual(returned_organization, organization)
         self.assertEqual(organization.organization_countries.count(), 2)
-        uganda = OrganizationCountry.objects.get(organization=organization, country=self.country_ug)
+        self.assertEqual(uganda.organization, organization)
+        self.assertEqual(uganda.country, self.country_ug)
         self.assertEqual(uganda.approval_status, OrganizationCountry.ApprovalStatus.APPROVED)
-        self.assertEqual(uganda.source_onboarding, second_onboarding)
+        self.assertIsNone(uganda.source_onboarding)
