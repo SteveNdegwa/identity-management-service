@@ -10,6 +10,24 @@ from .models import (
 )
 
 
+class RequestPathPrefixFilter(admin.SimpleListFilter):
+    title = 'request type'
+    parameter_name = 'request_type'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('api', 'API requests'),
+            ('db', 'DB requests'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'api':
+            return queryset.filter(request_path__startswith='/api')
+        if self.value() == 'db':
+            return queryset.filter(request_path__startswith='/cia')
+        return queryset
+
+
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
     list_display = (
@@ -147,6 +165,7 @@ class RequestLogAdmin(admin.ModelAdmin):
     )
 
     list_filter = (
+        RequestPathPrefixFilter,
         'request_method',
         'response_status',
         'is_authenticated',
