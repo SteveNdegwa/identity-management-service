@@ -86,7 +86,9 @@ TEMPLATES = [
 WSGI_APPLICATION = 'spin_identity.wsgi.application'
 
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
+    'https://stage-accounts.spinmobile.co',
+    'https://stage-onboarding.spinmobile.co',
+    'https://stage-v3-ui.spinmobile.co'
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
