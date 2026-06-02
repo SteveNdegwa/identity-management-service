@@ -1,6 +1,8 @@
 import secrets
+from urllib.parse import urljoin
 
 import bcrypt
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils.text import slugify
@@ -44,6 +46,58 @@ class SystemAdminService:
                 'Referrals can only be enabled for systems that allow self-registration.'
             )
 
+    @staticmethod
+    def _clean_subdomain(subdomain: str | None) -> str | None:
+        if subdomain is None:
+            return None
+        clean_subdomain = slugify(subdomain)
+        if not clean_subdomain:
+            raise SystemAdminServiceError('Subdomain cannot be blank.')
+        return clean_subdomain
+
+    @staticmethod
+    def _default_branding_from(parent_system: System) -> dict:
+        return {
+            'logo_url': parent_system.logo_url,
+            'favicon_url': parent_system.favicon_url,
+            'primary_color': parent_system.primary_color,
+            'secondary_color': parent_system.secondary_color,
+            'accent_colors': parent_system.accent_colors,
+            'tagline': parent_system.tagline,
+        }
+
+    @staticmethod
+    def _default_system_config_from(parent_system: System) -> dict:
+        return {
+            'description': parent_system.description,
+            'logo_url': parent_system.logo_url,
+            'favicon_url': parent_system.favicon_url,
+            'website': parent_system.website,
+            'primary_color': parent_system.primary_color,
+            'secondary_color': parent_system.secondary_color,
+            'accent_colors': parent_system.accent_colors,
+            'tagline': parent_system.tagline,
+            'password_type': parent_system.password_type,
+            'allow_password_login': parent_system.allow_password_login,
+            'allow_passwordless_login': parent_system.allow_passwordless_login,
+            'allow_magic_link_login': parent_system.allow_magic_link_login,
+            'allow_social_login': parent_system.allow_social_login,
+            'passwordless_only': parent_system.passwordless_only,
+            'allowed_social_providers': parent_system.allowed_social_providers,
+            'registration_open': parent_system.registration_open,
+            'auto_login_after_registration': parent_system.auto_login_after_registration,
+            'requires_approval': parent_system.requires_approval,
+            'allows_referrals': parent_system.allows_referrals,
+            'referral_reward_amount': parent_system.referral_reward_amount,
+            'auto_verify_referrals': parent_system.auto_verify_referrals,
+            'mfa_required': parent_system.mfa_required,
+            'mfa_required_enforced': parent_system.mfa_required_enforced,
+            'allowed_mfa_methods': parent_system.allowed_mfa_methods,
+            'refresh_token_timeout_minutes': parent_system.refresh_token_timeout_minutes,
+            'mfa_reauth_window_minutes': parent_system.mfa_reauth_window_minutes,
+            'default_role': parent_system.default_role,
+        }
+
     @transaction.atomic
     def create_system(
         self,
@@ -66,6 +120,7 @@ class SystemAdminService:
         kwargs['allowed_social_providers'] = self._normalize_social_providers(
             kwargs.get('allowed_social_providers', [])
         )
+        kwargs['subdomain'] = self._clean_subdomain(kwargs.get('subdomain'))
 
         final_slug = self._unique_slug(slug or clean_name)
         system = System.objects.create(
@@ -91,6 +146,79 @@ class SystemAdminService:
         return system
 
     @transaction.atomic
+    def create_reseller(
+        self,
+        *,
+        parent_system: System,
+        name: str,
+        subdomain: str,
+        slug: str | None = None,
+        countries: list[Country] | None = None,
+        performed_by: SystemUser | None = None,
+        client_name: str = 'Default Web App',
+        redirect_uris: list | None = None,
+        logout_uris: list | None = None,
+        allowed_scopes: list | None = None,
+        **kwargs,
+    ) -> tuple[System, SystemClient, str]:
+        if not parent_system.is_active:
+            raise SystemAdminServiceError('Parent system must be active.')
+
+        system_config = self._default_system_config_from(parent_system)
+        system_config.update({key: value for key, value in kwargs.items() if value is not None})
+        system_config['parent_system'] = parent_system
+        system_config['subdomain'] = subdomain
+
+        reseller = self.create_system(
+            realm=parent_system.realm,
+            name=name,
+            slug=slug,
+            countries=countries or list(parent_system.available_countries.all()),
+            performed_by=performed_by,
+            **system_config,
+        )
+
+        self.sync_reseller_configuration(parent_system=parent_system, reseller=reseller)
+
+        client, raw_secret = self.create_client(
+            system=reseller,
+            name=client_name,
+            performed_by=performed_by,
+            redirect_uris=redirect_uris
+            if redirect_uris is not None
+            else self.build_default_redirect_uris(reseller),
+            logout_uris=logout_uris
+            if logout_uris is not None
+            else self.build_default_logout_uris(reseller),
+            allowed_scopes=allowed_scopes or ['openid', 'profile', 'email'],
+        )
+
+        self._audit(
+            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            actor_system_user=performed_by,
+            subject=reseller,
+            payload={
+                'action': 'reseller_created',
+                'parent_system_id': str(parent_system.id),
+                'client_id': str(client.id),
+            },
+        )
+        return reseller, client, raw_secret
+
+    @transaction.atomic
+    def sync_reseller_configuration(
+        self,
+        *,
+        parent_system: System,
+        reseller: System,
+    ) -> None:
+        if reseller.parent_system_id != parent_system.id:
+            raise SystemAdminServiceError('Reseller is not linked to this parent system.')
+
+        self._sync_settings(parent_system=parent_system, reseller=reseller)
+        self._sync_onboarding_catalog(parent_system=parent_system, reseller=reseller)
+
+    @transaction.atomic
     def update_system(
         self,
         *,
@@ -99,7 +227,13 @@ class SystemAdminService:
         name: str | None = None,
         description: str | None = None,
         logo_url: str | None = None,
+        favicon_url: str | None = None,
         website: str | None = None,
+        subdomain: str | None = None,
+        primary_color: str | None = None,
+        secondary_color: str | None = None,
+        accent_colors: list | None = None,
+        tagline: str | None = None,
         password_type: str | None = None,
         allow_password_login: bool | None = None,
         allow_passwordless_login: bool | None = None,
@@ -135,9 +269,27 @@ class SystemAdminService:
         if logo_url is not None:
             system.logo_url = logo_url
             updated.append('logo_url')
+        if favicon_url is not None:
+            system.favicon_url = favicon_url
+            updated.append('favicon_url')
         if website is not None:
             system.website = website
             updated.append('website')
+        if subdomain is not None:
+            system.subdomain = self._clean_subdomain(subdomain)
+            updated.append('subdomain')
+        if primary_color is not None:
+            system.primary_color = primary_color
+            updated.append('primary_color')
+        if secondary_color is not None:
+            system.secondary_color = secondary_color
+            updated.append('secondary_color')
+        if accent_colors is not None:
+            system.accent_colors = accent_colors
+            updated.append('accent_colors')
+        if tagline is not None:
+            system.tagline = tagline
+            updated.append('tagline')
         if password_type is not None:
             system.password_type = password_type
             updated.append('password_type')
@@ -522,6 +674,114 @@ class SystemAdminService:
             payload={'system': system.name, 'key': clean_key},
         )
         return setting
+
+    @classmethod
+    def build_default_redirect_uris(cls, system: System) -> list[str]:
+        return [
+            cls._build_subdomain_url(system, path)
+            for path in getattr(
+                settings,
+                'IDENTITY_DEFAULT_REDIRECT_PATHS',
+                ['/auth/callback'],
+            )
+        ]
+
+    @classmethod
+    def build_default_logout_uris(cls, system: System) -> list[str]:
+        return [
+            cls._build_subdomain_url(system, path)
+            for path in getattr(
+                settings,
+                'IDENTITY_DEFAULT_LOGOUT_PATHS',
+                ['/auth/logout'],
+            )
+        ]
+
+    @staticmethod
+    def _build_subdomain_url(system: System, path: str) -> str:
+        if not system.subdomain:
+            raise SystemAdminServiceError('System subdomain is required to build OAuth URIs.')
+
+        root_domain = getattr(settings, 'IDENTITY_PUBLIC_ROOT_DOMAIN', '').strip()
+        scheme = getattr(settings, 'IDENTITY_PUBLIC_SCHEME', 'https').strip() or 'https'
+        if not root_domain:
+            raise SystemAdminServiceError(
+                'IDENTITY_PUBLIC_ROOT_DOMAIN is required to build OAuth URIs.'
+            )
+        host = f'{system.subdomain}.{root_domain}'
+        return urljoin(f'{scheme}://{host}/', path.lstrip('/'))
+
+    @staticmethod
+    def _sync_settings(*, parent_system: System, reseller: System) -> None:
+        settings_to_create = []
+        existing_keys = set(reseller.settings.values_list('key', flat=True))
+        for parent_setting in parent_system.settings.all():
+            if parent_setting.key in existing_keys:
+                continue
+            settings_to_create.append(
+                SystemSettings(
+                    system=reseller,
+                    key=parent_setting.key,
+                    value=parent_setting.value,
+                    value_type=parent_setting.value_type,
+                    description=parent_setting.description,
+                    is_secret=parent_setting.is_secret,
+                )
+            )
+        if settings_to_create:
+            SystemSettings.objects.bulk_create(settings_to_create)
+
+    @staticmethod
+    def _sync_onboarding_catalog(*, parent_system: System, reseller: System) -> None:
+        from organizations.models import OnboardingServiceProduct, OnboardingVerificationCheck
+
+        existing_service_codes = set(
+            reseller.onboarding_service_products.values_list('code', flat=True)
+        )
+        services_to_create = []
+        for service in parent_system.onboarding_service_products.all():
+            if service.code in existing_service_codes:
+                continue
+            services_to_create.append(
+                OnboardingServiceProduct(
+                    system=reseller,
+                    code=service.code,
+                    name=service.name,
+                    description=service.description,
+                    amount=service.amount,
+                    tax_amount=service.tax_amount,
+                    currency=service.currency,
+                    is_active=service.is_active,
+                    sort_order=service.sort_order,
+                    metadata=service.metadata,
+                )
+            )
+        if services_to_create:
+            OnboardingServiceProduct.objects.bulk_create(services_to_create)
+
+        existing_check_codes = set(
+            reseller.onboarding_verification_checks.values_list('code', flat=True)
+        )
+        checks_to_create = []
+        for check in parent_system.onboarding_verification_checks.all():
+            if check.code in existing_check_codes:
+                continue
+            checks_to_create.append(
+                OnboardingVerificationCheck(
+                    system=reseller,
+                    code=check.code,
+                    name=check.name,
+                    description=check.description,
+                    integration_code=check.integration_code,
+                    trigger_mode=check.trigger_mode,
+                    is_active=check.is_active,
+                    required_for_onboarding=check.required_for_onboarding,
+                    sort_order=check.sort_order,
+                    metadata=check.metadata,
+                )
+            )
+        if checks_to_create:
+            OnboardingVerificationCheck.objects.bulk_create(checks_to_create)
 
     @staticmethod
     def _unique_slug(raw_value: str, exclude_id=None) -> str:

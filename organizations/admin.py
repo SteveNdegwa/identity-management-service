@@ -41,7 +41,15 @@ class OrganizationSettingsInline(admin.TabularInline):
 
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ('name', 'system', 'slug', 'is_active', 'verified', 'verified_at')
+    list_display = (
+        'name',
+        'system',
+        'slug',
+        'subdomain',
+        'is_active',
+        'verified',
+        'verified_at',
+    )
     list_filter = ('is_active', 'verified', 'system')
     search_fields = ('name', 'slug')
     ordering = ('name',)
@@ -56,7 +64,29 @@ class OrganizationAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             'Basic Information',
-            {'fields': ('system', 'name', 'slug', 'description', 'logo_url', 'website')},
+            {
+                'fields': (
+                    'system',
+                    'name',
+                    'slug',
+                    'description',
+                    'logo_url',
+                    'favicon_url',
+                    'website',
+                )
+            },
+        ),
+        (
+            'Branding',
+            {
+                'fields': (
+                    'subdomain',
+                    'primary_color',
+                    'secondary_color',
+                    'accent_colors',
+                    'tagline',
+                )
+            },
         ),
         (
             'Status',

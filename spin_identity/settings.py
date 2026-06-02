@@ -95,6 +95,19 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     'X-SSO-Session-Id',
 ]
 
+IDENTITY_PUBLIC_SCHEME = os.environ.get('IDENTITY_PUBLIC_SCHEME', 'https')
+IDENTITY_PUBLIC_ROOT_DOMAIN = os.environ.get('IDENTITY_PUBLIC_ROOT_DOMAIN', '')
+IDENTITY_DEFAULT_REDIRECT_PATHS = [
+    path.strip()
+    for path in os.environ.get('IDENTITY_DEFAULT_REDIRECT_PATHS', '/auth/callback').split(',')
+    if path.strip()
+]
+IDENTITY_DEFAULT_LOGOUT_PATHS = [
+    path.strip()
+    for path in os.environ.get('IDENTITY_DEFAULT_LOGOUT_PATHS', '/auth/logout').split(',')
+    if path.strip()
+]
+
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 

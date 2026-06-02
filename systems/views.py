@@ -21,7 +21,11 @@ system_service = SystemAdminService()
 
 def _get_system(system_id: str) -> System | None:
     try:
-        return System.objects.prefetch_related('available_countries').get(id=system_id)
+        return (
+            System.objects.select_related('parent_system')
+            .prefetch_related('available_countries')
+            .get(id=system_id)
+        )
     except System.DoesNotExist:
         return None
 
@@ -58,11 +62,20 @@ def _system_payload(system: System) -> dict:
     return {
         'id': str(system.id),
         'realm_id': str(system.realm_id),
+        'parent_system_id': str(system.parent_system_id) if system.parent_system_id else None,
+        'is_reseller': system.is_reseller,
         'name': system.name,
         'slug': system.slug,
         'description': system.description,
         'logo_url': system.logo_url,
+        'favicon_url': system.favicon_url,
         'website': system.website,
+        'subdomain': system.subdomain,
+        'primary_color': system.primary_color,
+        'secondary_color': system.secondary_color,
+        'accent_colors': system.accent_colors,
+        'tagline': system.tagline,
+        'effective_branding': system.get_effective_branding(),
         'password_type': system.password_type,
         'allow_password_login': system.allow_password_login,
         'allow_passwordless_login': system.allow_passwordless_login,
@@ -139,12 +152,16 @@ def system_list_view(request: ExtendedRequest) -> JsonResponse:
     try:
         qs = (
             System.objects.prefetch_related('available_countries')
-            .select_related('realm')
+            .select_related('realm', 'parent_system')
             .order_by('name')
         )
 
         if realm_id := request.GET.get('realm_id'):
             qs = qs.filter(realm_id=realm_id)
+        if parent_system_id := request.GET.get('parent_system_id'):
+            qs = qs.filter(parent_system_id=parent_system_id)
+        if is_reseller := request.GET.get('is_reseller'):
+            qs = qs.filter(parent_system__isnull=is_reseller.lower() != 'true')
         if is_active := request.GET.get('is_active'):
             qs = qs.filter(is_active=is_active.lower() == 'true')
 
@@ -201,7 +218,13 @@ def system_create_view(request: ExtendedRequest) -> JsonResponse:
             performed_by=request.system_user,
             description=data.get('description', ''),
             logo_url=data.get('logo_url', ''),
+            favicon_url=data.get('favicon_url', ''),
             website=data.get('website', ''),
+            subdomain=data.get('subdomain'),
+            primary_color=data.get('primary_color', ''),
+            secondary_color=data.get('secondary_color', ''),
+            accent_colors=data.get('accent_colors', []),
+            tagline=data.get('tagline', ''),
             password_type=data.get('password_type', System.PasswordType.PASSWORD),
             allow_password_login=data.get('allow_password_login', True),
             allow_passwordless_login=data.get('allow_passwordless_login', False),
@@ -232,6 +255,63 @@ def system_create_view(request: ExtendedRequest) -> JsonResponse:
         return ResponseProvider.server_error()
 
 
+@user_login_required(required_permission='system.create')
+@require_POST
+def reseller_create_view(request: ExtendedRequest, system_id: str) -> JsonResponse:
+    parent_system = _get_system(system_id)
+    if not parent_system:
+        return ResponseProvider.not_found(
+            error='not_found',
+            message='Parent system not found.',
+        )
+
+    try:
+        data = request.data
+        country_values = (
+            data.get('country_ids') or data.get('country_codes') or data.get('countries') or []
+        )
+        countries = get_countries_from_values(country_values)
+        if country_values and len(countries) != len(country_values):
+            return ResponseProvider.bad_request(
+                error='invalid_country',
+                message='One or more countries are invalid.',
+            )
+
+        reseller, client, raw_secret = system_service.create_reseller(
+            parent_system=parent_system,
+            name=data.get('name', ''),
+            slug=data.get('slug'),
+            subdomain=data.get('subdomain', ''),
+            countries=countries or None,
+            performed_by=request.system_user,
+            client_name=data.get('client_name', 'Default Web App'),
+            redirect_uris=data.get('redirect_uris'),
+            logout_uris=data.get('logout_uris'),
+            allowed_scopes=data.get('allowed_scopes'),
+            description=data.get('description'),
+            logo_url=data.get('logo_url'),
+            favicon_url=data.get('favicon_url'),
+            website=data.get('website'),
+            primary_color=data.get('primary_color'),
+            secondary_color=data.get('secondary_color'),
+            accent_colors=data.get('accent_colors'),
+            tagline=data.get('tagline'),
+        )
+
+        payload = _system_payload(reseller)
+        payload['client'] = _client_payload(client)
+        payload['client']['client_secret'] = raw_secret or None
+        return ResponseProvider.created(**payload)
+    except SystemAdminServiceError as e:
+        return ResponseProvider.bad_request(
+            error='system_management_error',
+            message=str(e),
+        )
+    except Exception as e:
+        logger.exception('reseller_create_view: %s', e)
+        return ResponseProvider.server_error()
+
+
 @user_login_required(required_permission='system.update')
 @require_http_methods(['PATCH'])
 def system_update_view(request: ExtendedRequest, system_id: str) -> JsonResponse:
@@ -250,7 +330,13 @@ def system_update_view(request: ExtendedRequest, system_id: str) -> JsonResponse
             name=data.get('name'),
             description=data.get('description'),
             logo_url=data.get('logo_url'),
+            favicon_url=data.get('favicon_url'),
             website=data.get('website'),
+            subdomain=data.get('subdomain'),
+            primary_color=data.get('primary_color'),
+            secondary_color=data.get('secondary_color'),
+            accent_colors=data.get('accent_colors'),
+            tagline=data.get('tagline'),
             password_type=data.get('password_type'),
             allow_password_login=data.get('allow_password_login'),
             allow_passwordless_login=data.get('allow_passwordless_login'),
