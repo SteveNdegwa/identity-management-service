@@ -256,14 +256,18 @@ def _post_registration_response(
 def registration_identifier_initiate_view(request: ExtendedRequest) -> JsonResponse:
     try:
         data = request.data
-        system = _get_system(data) if data.get('system_id') or data.get('system') else None
+        client = _get_client(request.data)
+        if not client:
+            return ResponseProvider.bad_request(
+                error='invalid_client', message='Client not found or inactive.'
+            )
 
         verification = identifier_verification_service.initiate_registration_verification(
             identifier_type=data.get('identifier_type', ''),
             value=data.get('value', ''),
             method=data.get('method', 'otp'),
             ip_address=request.client_ip,
-            system=system,
+            system=client.system,
         )
 
         return ResponseProvider.success(
