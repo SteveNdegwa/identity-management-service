@@ -93,7 +93,7 @@ class IdentifierVerificationService:
     ) -> ContactVerification:
         identifier_type = self._validate_identifier_type(identifier_type)
         method = self._validate_method(method)
-        value = (value or '').strip().replace(" ", "")
+        value = (value or '').strip().replace(' ', '')
         if not value:
             raise IdentifierVerificationError(f'{identifier_type} value is required.')
 

@@ -336,10 +336,10 @@ def register_view(request: ExtendedRequest) -> JsonResponse:
 
         auth_method = (
             SSOSession.AuthMethod.PIN
-            if system.password_type == System.PasswordType.PIN
+            if client.system.password_type == System.PasswordType.PIN
             else SSOSession.AuthMethod.PASSWORD
         )
-        return _post_registration_response(request, system, user, system_user, auth_method)
+        return _post_registration_response(request, client.system, user, system_user, auth_method)
 
     except LinkAccountRequired as e:
         return ResponseProvider.conflict(
@@ -379,10 +379,10 @@ def register_link_view(request: ExtendedRequest) -> JsonResponse:
 
         auth_method = (
             SSOSession.AuthMethod.PIN
-            if system.password_type == System.PasswordType.PIN
+            if client.system.password_type == System.PasswordType.PIN
             else SSOSession.AuthMethod.PASSWORD
         )
-        return _post_registration_response(request, system, user, system_user, auth_method)
+        return _post_registration_response(request, client.system, user, system_user, auth_method)
 
     except SelfRegistrationError as e:
         return ResponseProvider.bad_request(error='registration_error', message=str(e))
