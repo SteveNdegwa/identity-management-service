@@ -202,6 +202,9 @@ class ModelAuditLog(BaseModel):
     user_id = models.UUIDField(null=True, blank=True, db_index=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(null=True, blank=True)  # noqa: DJ001
+    request_method = models.CharField(max_length=10, blank=True)
+    request_path = models.TextField(blank=True)
+    activity_name = models.CharField(max_length=255, blank=True)
 
     event_type = models.CharField(
         max_length=20,

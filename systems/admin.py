@@ -23,9 +23,16 @@ class SystemAdminForm(forms.ModelForm):
             'realm',
             'name',
             'slug',
+            'parent_system',
             'description',
             'logo_url',
+            'favicon_url',
             'website',
+            'subdomain',
+            'primary_color',
+            'secondary_color',
+            'accent_colors',
+            'tagline',
             'available_countries',
             'password_type',
             'allow_password_login',
@@ -107,6 +114,8 @@ class SystemAdmin(admin.ModelAdmin):
         'name',
         'slug',
         'realm',
+        'parent_system',
+        'subdomain',
         'password_type',
         'is_active_colored',
         'registration_open',
@@ -122,6 +131,7 @@ class SystemAdmin(admin.ModelAdmin):
         'mfa_required',
         'mfa_required_enforced',
         'password_type',
+        'parent_system',
     )
     search_fields = (
         'name',
@@ -147,14 +157,28 @@ class SystemAdmin(admin.ModelAdmin):
             {
                 'fields': (
                     'realm',
+                    'parent_system',
                     'name',
                     'slug',
                     'description',
                     'logo_url',
+                    'favicon_url',
                     'website',
+                    'subdomain',
                     'available_countries',
                     'default_role',
                     'is_active',
+                )
+            },
+        ),
+        (
+            'Branding',
+            {
+                'fields': (
+                    'primary_color',
+                    'secondary_color',
+                    'accent_colors',
+                    'tagline',
                 )
             },
         ),

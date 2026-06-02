@@ -121,7 +121,14 @@ def _organization_payload(org: Organization) -> dict:
         'slug': org.slug,
         'description': org.description,
         'logo_url': org.logo_url,
+        'favicon_url': org.favicon_url,
         'website': org.website,
+        'subdomain': org.subdomain,
+        'primary_color': org.primary_color,
+        'secondary_color': org.secondary_color,
+        'accent_colors': org.accent_colors,
+        'tagline': org.tagline,
+        'effective_branding': org.get_effective_branding(),
         'is_active': org.is_active,
         'verified': org.verified,
         'verified_at': org.verified_at.isoformat() if org.verified_at else None,
@@ -458,7 +465,13 @@ def organization_update_view(request: ExtendedRequest, organization_id: str) -> 
             name=data.get('name'),
             description=data.get('description'),
             logo_url=data.get('logo_url'),
+            favicon_url=data.get('favicon_url'),
             website=data.get('website'),
+            subdomain=data.get('subdomain'),
+            primary_color=data.get('primary_color'),
+            secondary_color=data.get('secondary_color'),
+            accent_colors=data.get('accent_colors'),
+            tagline=data.get('tagline'),
         )
 
         return ResponseProvider.success(**_organization_payload(org))

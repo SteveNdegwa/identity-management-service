@@ -15,6 +15,14 @@ class System(BaseModel):
         related_name='systems',
         help_text='Realm determines SSO boundary and identifier uniqueness',
     )
+    parent_system = models.ForeignKey(
+        'self',
+        on_delete=models.PROTECT,
+        related_name='resellers',
+        null=True,
+        blank=True,
+        help_text='Parent system for reseller systems. Blank means this is a root system.',
+    )
 
     class PasswordType(models.TextChoices):
         PASSWORD = 'password', 'Password'
@@ -24,7 +32,13 @@ class System(BaseModel):
     slug = models.SlugField(max_length=80, unique=True)
     description = models.TextField(blank=True)
     logo_url = models.URLField(blank=True)
+    favicon_url = models.URLField(blank=True)
     website = models.URLField(blank=True)
+    subdomain = models.SlugField(max_length=80, unique=True, null=True, blank=True)
+    primary_color = models.CharField(max_length=20, blank=True)
+    secondary_color = models.CharField(max_length=20, blank=True)
+    accent_colors = models.JSONField(default=list, blank=True)
+    tagline = models.CharField(max_length=255, blank=True)
 
     available_countries = models.ManyToManyField(
         'base.Country',
@@ -102,6 +116,10 @@ class System(BaseModel):
             old = System.objects.get(pk=self.pk)
             if old.realm_id != self.realm_id:
                 raise ValidationError('System realm cannot be changed after creation.')
+            if old.parent_system_id != self.parent_system_id:
+                raise ValidationError('System parent cannot be changed after creation.')
+        if self.parent_system_id == self.id:
+            raise ValidationError('A system cannot be its own reseller parent.')
         self.allowed_social_providers = normalize_social_provider_list(
             self.allowed_social_providers
         )
@@ -114,6 +132,29 @@ class System(BaseModel):
     @property
     def referrals_enabled(self) -> bool:
         return self.registration_open and self.allows_referrals
+
+    @property
+    def is_reseller(self) -> bool:
+        return self.parent_system_id is not None
+
+    def get_effective_branding(self) -> dict:
+        parent_branding = (
+            self.parent_system.get_effective_branding() if self.parent_system_id else {}
+        )
+
+        def resolve(field_name):
+            value = getattr(self, field_name)
+            return value if value not in ('', None, []) else parent_branding.get(field_name, '')
+
+        return {
+            'subdomain': resolve('subdomain'),
+            'logo_url': resolve('logo_url'),
+            'favicon_url': resolve('favicon_url'),
+            'primary_color': resolve('primary_color'),
+            'secondary_color': resolve('secondary_color'),
+            'accent_colors': resolve('accent_colors'),
+            'tagline': resolve('tagline'),
+        }
 
     def get_effective_allowed_mfa_methods(self) -> list:
         return self.allowed_mfa_methods or []

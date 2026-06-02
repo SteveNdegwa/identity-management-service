@@ -27,7 +27,13 @@ class OrganizationService:
         name: str | None = None,
         description: str | None = None,
         logo_url: str | None = None,
+        favicon_url: str | None = None,
         website: str | None = None,
+        subdomain: str | None = None,
+        primary_color: str | None = None,
+        secondary_color: str | None = None,
+        accent_colors: list | None = None,
+        tagline: str | None = None,
     ) -> Organization:
         updated = []
 
@@ -51,9 +57,33 @@ class OrganizationService:
             organization.logo_url = logo_url
             updated.append('logo_url')
 
+        if favicon_url is not None:
+            organization.favicon_url = favicon_url
+            updated.append('favicon_url')
+
         if website is not None:
             organization.website = website
             updated.append('website')
+
+        if subdomain is not None:
+            organization.subdomain = slugify(subdomain) or None
+            updated.append('subdomain')
+
+        if primary_color is not None:
+            organization.primary_color = primary_color
+            updated.append('primary_color')
+
+        if secondary_color is not None:
+            organization.secondary_color = secondary_color
+            updated.append('secondary_color')
+
+        if accent_colors is not None:
+            organization.accent_colors = accent_colors
+            updated.append('accent_colors')
+
+        if tagline is not None:
+            organization.tagline = tagline
+            updated.append('tagline')
 
         if updated:
             organization.save(update_fields=updated)

@@ -14,7 +14,13 @@ class Organization(BaseModel):
     description = models.TextField(blank=True)
     slug = models.SlugField(max_length=120)
     logo_url = models.URLField(blank=True)
+    favicon_url = models.URLField(blank=True)
     website = models.URLField(blank=True)
+    subdomain = models.SlugField(max_length=80, unique=True, null=True, blank=True)
+    primary_color = models.CharField(max_length=20, blank=True)
+    secondary_color = models.CharField(max_length=20, blank=True)
+    accent_colors = models.JSONField(default=list, blank=True)
+    tagline = models.CharField(max_length=255, blank=True)
     countries = models.ManyToManyField(
         'base.Country', through='OrganizationCountry', related_name='organizations'
     )
@@ -42,6 +48,23 @@ class Organization(BaseModel):
 
     def __str__(self):
         return f'{self.name} ({self.system})'
+
+    def get_effective_branding(self) -> dict:
+        system_branding = self.system.get_effective_branding()
+
+        def resolve(field_name):
+            value = getattr(self, field_name)
+            return value if value not in ('', None, []) else system_branding.get(field_name, '')
+
+        return {
+            'subdomain': resolve('subdomain'),
+            'logo_url': resolve('logo_url'),
+            'favicon_url': resolve('favicon_url'),
+            'primary_color': resolve('primary_color'),
+            'secondary_color': resolve('secondary_color'),
+            'accent_colors': resolve('accent_colors'),
+            'tagline': resolve('tagline'),
+        }
 
 
 class OrganizationCountry(BaseModel):

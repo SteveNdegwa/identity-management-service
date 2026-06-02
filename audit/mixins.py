@@ -94,8 +94,7 @@ class AuditableMixin:
 
         ModelAuditLog.objects.create(
             request_id=context.get('request_id'),
-            api_client=context.get('api_client'),
-            user=context.get('user'),
+            user_id=context.get('user_id'),
             ip_address=context.get('ip_address'),
             user_agent=context.get('user_agent'),
             request_method=context.get('request_method'),

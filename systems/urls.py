@@ -6,6 +6,7 @@ urlpatterns = [
     path('', views.system_list_view, name='system-list'),
     path('create/', views.system_create_view, name='system-create'),
     path('<str:system_id>/', views.system_detail_view, name='system-detail'),
+    path('<str:system_id>/resellers/create/', views.reseller_create_view, name='reseller-create'),
     path('<str:system_id>/update/', views.system_update_view, name='system-update'),
     path('<str:system_id>/deactivate/', views.system_deactivate_view, name='system-deactivate'),
     path('<str:system_id>/reactivate/', views.system_reactivate_view, name='system-reactivate'),
