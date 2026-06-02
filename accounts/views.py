@@ -315,14 +315,14 @@ def registration_identifier_verify_view(request: ExtendedRequest) -> JsonRespons
 def register_view(request: ExtendedRequest) -> JsonResponse:
     try:
         data = request.data
-        system = _get_system(data)
-        if not system:
+        client = _get_client(request.data)
+        if not client:
             return ResponseProvider.bad_request(
-                error='invalid_system', message='System not found or inactive.'
+                error='invalid_client', message='Client not found or inactive.'
             )
 
         user, system_user = account_service.self_registration(
-            system=system,
+            system=client.system,
             primary_country=_get_country(data),
             ip_address=request.client_ip,
             email=data.get('email'),
@@ -336,10 +336,10 @@ def register_view(request: ExtendedRequest) -> JsonResponse:
 
         auth_method = (
             SSOSession.AuthMethod.PIN
-            if system.password_type == System.PasswordType.PIN
+            if client.system.password_type == System.PasswordType.PIN
             else SSOSession.AuthMethod.PASSWORD
         )
-        return _post_registration_response(request, system, user, system_user, auth_method)
+        return _post_registration_response(request, client.system, user, system_user, auth_method)
 
     except LinkAccountRequired as e:
         return ResponseProvider.conflict(
@@ -358,10 +358,10 @@ def register_view(request: ExtendedRequest) -> JsonResponse:
 def register_link_view(request: ExtendedRequest) -> JsonResponse:
     try:
         data = request.data
-        system = _get_system(data)
-        if not system:
+        client = _get_client(request.data)
+        if not client:
             return ResponseProvider.bad_request(
-                error='invalid_system', message='System not found or inactive.'
+                error='invalid_client', message='Client not found or inactive.'
             )
 
         try:
@@ -371,7 +371,7 @@ def register_link_view(request: ExtendedRequest) -> JsonResponse:
 
         user, system_user = account_service.self_registration_link(
             existing_user=existing_user,
-            system=system,
+            system=client.system,
             primary_country=_get_country(data),
             referral_code=data.get('referral_code'),
             ip_address=request.client_ip,
@@ -379,10 +379,10 @@ def register_link_view(request: ExtendedRequest) -> JsonResponse:
 
         auth_method = (
             SSOSession.AuthMethod.PIN
-            if system.password_type == System.PasswordType.PIN
+            if client.system.password_type == System.PasswordType.PIN
             else SSOSession.AuthMethod.PASSWORD
         )
-        return _post_registration_response(request, system, user, system_user, auth_method)
+        return _post_registration_response(request, client.system, user, system_user, auth_method)
 
     except SelfRegistrationError as e:
         return ResponseProvider.bad_request(error='registration_error', message=str(e))
@@ -395,18 +395,18 @@ def register_link_view(request: ExtendedRequest) -> JsonResponse:
 def register_social_view(request: ExtendedRequest) -> JsonResponse:
     try:
         data = request.data
-        system = _get_system(data)
-        if not system:
+        client = _get_client(request.data)
+        if not client:
             return ResponseProvider.bad_request(
-                error='invalid_system', message='System not found or inactive.'
+                error='invalid_client', message='Client not found or inactive.'
             )
 
-        role = _get_role(data, system)
+        role = _get_role(data, client.system)
         if not role:
             return ResponseProvider.bad_request(error='invalid_role', message='Role not found.')
 
         user, system_user = account_service.self_registration_social(
-            system=system,
+            system=client.system,
             role=role,
             primary_country=_get_country(data),
             referral_code=data.get('referral_code'),
@@ -418,7 +418,7 @@ def register_social_view(request: ExtendedRequest) -> JsonResponse:
             **_verification_ids(data),
         )
         return _post_registration_response(
-            request, system, user, system_user, SSOSession.AuthMethod.SOCIAL
+            request, client.system, user, system_user, SSOSession.AuthMethod.SOCIAL
         )
     except LinkAccountRequired as e:
         return ResponseProvider.conflict(
@@ -437,13 +437,13 @@ def register_social_view(request: ExtendedRequest) -> JsonResponse:
 def register_social_link_view(request: ExtendedRequest) -> JsonResponse:
     try:
         data = request.data
-        system = _get_system(data)
-        if not system:
+        client = _get_client(request.data)
+        if not client:
             return ResponseProvider.bad_request(
-                error='invalid_system', message='System not found or inactive.'
+                error='invalid_client', message='Client not found or inactive.'
             )
 
-        role = _get_role(data, system)
+        role = _get_role(data, client.system)
         if not role:
             return ResponseProvider.bad_request(error='invalid_role', message='Role not found.')
 
@@ -454,7 +454,7 @@ def register_social_link_view(request: ExtendedRequest) -> JsonResponse:
 
         user, system_user = account_service.self_registration_social_link(
             existing_user=existing_user,
-            system=system,
+            system=client.system,
             role=role,
             primary_country=_get_country(data),
             referral_code=data.get('referral_code'),
@@ -462,7 +462,7 @@ def register_social_link_view(request: ExtendedRequest) -> JsonResponse:
             **_social_fields(data),
         )
         return _post_registration_response(
-            request, system, user, system_user, SSOSession.AuthMethod.SOCIAL
+            request, client.system, user, system_user, SSOSession.AuthMethod.SOCIAL
         )
     except SelfRegistrationError as e:
         return ResponseProvider.bad_request(error='registration_error', message=str(e))
