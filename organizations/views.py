@@ -1,5 +1,6 @@
 import logging
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -184,6 +185,14 @@ def _setting_payload(s: OrganizationSettings) -> dict:
     }
 
 
+def _created_organization_id(onboarding: OrganizationOnboarding) -> str | None:
+    try:
+        created_organization = onboarding.created_organization
+    except ObjectDoesNotExist:
+        return None
+    return str(created_organization.id)
+
+
 def _onboarding_payload(onboarding: OrganizationOnboarding) -> dict:
     latest_payment = onboarding.payments.order_by('-created_at').first()
     return {
@@ -208,9 +217,7 @@ def _onboarding_payload(onboarding: OrganizationOnboarding) -> dict:
         'submitted_at': onboarding.submitted_at.isoformat() if onboarding.submitted_at else None,
         'reviewed_at': onboarding.reviewed_at.isoformat() if onboarding.reviewed_at else None,
         'completed_at': onboarding.completed_at.isoformat() if onboarding.completed_at else None,
-        'created_organization_id': str(onboarding.created_organization_id)
-        if onboarding.created_organization_id
-        else None,
+        'created_organization_id': _created_organization_id(onboarding),
         'applicant_notes': onboarding.applicant_notes,
         'internal_notes': onboarding.internal_notes,
         'documents': [

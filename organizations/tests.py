@@ -9,12 +9,14 @@ from organizations.models import (
     OnboardingPayment,
     OnboardingServiceProduct,
     OnboardingStatus,
+    Organization,
     OrganizationCountry,
     OrganizationOnboarding,
     OrganizationOnboardingCountry,
 )
 from organizations.services.onboarding_service import OnboardingError, OnboardingService
 from organizations.services.organization_service import OrganizationService
+from organizations.views import _onboarding_payload
 from permissions.models import Role
 from systems.models import System
 
@@ -117,6 +119,42 @@ class OnboardingServiceTests(TestCase):
         self.assertEqual(onboarding.organization_type, 'microfinance_bank')
         self.assertEqual(onboarding.products_needed, ['statement_analysis', 'kyc_kyb_checks'])
         self.assertEqual(onboarding.pain_points, ['manual_analysis', 'manual_verifications'])
+
+    def test_onboarding_payload_handles_missing_created_organization(self):
+        onboarding = self.service.create_application(
+            system=self.system,
+            contact_system_user=self.system_user,
+            countries=[
+                {'country': self.country_ke, 'registration_number': 'KE-1', 'tax_id': 'KRA-1'}
+            ],
+            legal_name='Acme Holdings Ltd',
+            documents=self._documents(),
+        )
+
+        payload = _onboarding_payload(onboarding)
+
+        self.assertIsNone(payload['created_organization_id'])
+
+    def test_onboarding_payload_includes_created_organization_id(self):
+        onboarding = self.service.create_application(
+            system=self.system,
+            contact_system_user=self.system_user,
+            countries=[
+                {'country': self.country_ke, 'registration_number': 'KE-1', 'tax_id': 'KRA-1'}
+            ],
+            legal_name='Acme Holdings Ltd',
+            documents=self._documents(),
+        )
+        organization = Organization.objects.create(
+            system=self.system,
+            name='Acme Holdings Ltd',
+            slug='acme-holdings',
+            onboarding=onboarding,
+        )
+
+        payload = _onboarding_payload(onboarding)
+
+        self.assertEqual(payload['created_organization_id'], str(organization.id))
 
     def test_editable_onboarding_country_details_can_be_updated(self):
         onboarding = self.service.create_application(
