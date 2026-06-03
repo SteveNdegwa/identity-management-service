@@ -920,10 +920,10 @@ class SSOService:
             payload = jwt.decode(
                 raw_access_token,
                 options={
-                    "verify_signature": False,
-                    "verify_exp": True,
+                    'verify_signature': False,
+                    'verify_exp': True,
                 },
-                algorithms=["none"],
+                algorithms=['none'],
             )
         except jwt.PyJWTError:
             return {'active': False}
@@ -1542,7 +1542,7 @@ class SSOService:
     @staticmethod
     def _sign_jwt(claims: dict) -> str:
         # return jwt.encode(claims, settings.SSO_PRIVATE_KEY, algorithm=JWT_ALGORITHM)
-        return jwt.encode(claims, settings.SSO_PRIVATE_KEY, algorithm="none")
+        return jwt.encode(claims, settings.SSO_PRIVATE_KEY, algorithm='none')
 
     @staticmethod
     def _rate_limit_passwordless(login_value: str, ip_address: str) -> None:
