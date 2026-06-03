@@ -93,7 +93,19 @@ class AuditEventType(models.TextChoices):
 
     # Systems
     SYSTEM_CREATED = 'system.created'
+    SYSTEM_UPDATED = 'system.updated'
+    SYSTEM_DEACTIVATED = 'system.deactivated'
+    SYSTEM_REACTIVATED = 'system.reactivated'
+    SYSTEM_COUNTRY_ADDED = 'system.country.added'
+    SYSTEM_COUNTRY_REMOVED = 'system.country.removed'
     SYSTEM_SETTINGS_CHANGED = 'system.settings.changed'
+    SYSTEM_SETTING_SET = 'system.setting.set'
+    SYSTEM_CLIENT_CREATED = 'system.client.created'
+    SYSTEM_CLIENT_UPDATED = 'system.client.updated'
+    SYSTEM_CLIENT_DEACTIVATED = 'system.client.deactivated'
+    SYSTEM_CLIENT_REACTIVATED = 'system.client.reactivated'
+    SYSTEM_CLIENT_SECRET_REGENERATED = 'system.client.secret_regenerated'
+    SYSTEM_RESELLER_CREATED = 'system.reseller.created'
     WEBHOOK_TRIGGERED = 'system.webhook.triggered'
     WEBHOOK_FAILED = 'system.webhook.failed'
 

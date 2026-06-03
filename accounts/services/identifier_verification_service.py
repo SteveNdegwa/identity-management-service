@@ -115,21 +115,25 @@ class IdentifierVerificationService:
             raw_code = generate_otp()
             verification.code_hash = hashlib.sha256(raw_code.encode()).hexdigest()
             verification.save()
-            NotificationService.deliver_otp(
-                identifier_type=identifier_type,
-                value=value,
-                raw_code=raw_code,
-                system=system,
+            transaction.on_commit(
+                lambda: NotificationService.deliver_otp(
+                    identifier_type=identifier_type,
+                    value=value,
+                    raw_code=raw_code,
+                    system=system,
+                )
             )
         else:
             raw_token = secrets.token_urlsafe(32)
             verification.token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
             verification.save()
-            NotificationService.deliver_verification_link(
-                identifier_type=identifier_type,
-                value=value,
-                raw_token=raw_token,
-                system=system,
+            transaction.on_commit(
+                lambda: NotificationService.deliver_verification_link(
+                    identifier_type=identifier_type,
+                    value=value,
+                    raw_token=raw_token,
+                    system=system,
+                )
             )
 
         return verification

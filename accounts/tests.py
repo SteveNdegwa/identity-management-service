@@ -1,9 +1,10 @@
 import hashlib
 from datetime import date
+from unittest.mock import patch
 
 from django.test import TestCase
 
-from accounts.models import SocialAccount, SystemUser, User
+from accounts.models import ContactVerification, SocialAccount, SystemUser, User
 from accounts.services.account_service import (
     AccountService,
     ClaimLinkConfirmationRequired,
@@ -80,6 +81,23 @@ class AccountFlowTests(TestCase):
         self.assertTrue(user.email_verified)
         self.assertTrue(user.phone_verified)
         self.assertEqual(system_user.user, user)
+
+    def test_identifier_verification_notification_is_sent_after_commit(self):
+        with patch(
+            'accounts.services.identifier_verification_service.NotificationService.deliver_otp'
+        ) as deliver_otp:
+            with self.captureOnCommitCallbacks(execute=False) as callbacks:
+                verification = self.verification_service.initiate_registration_verification(
+                    'email', 'ada@example.com'
+                )
+
+            self.assertTrue(ContactVerification.objects.filter(id=verification.id).exists())
+            self.assertEqual(len(callbacks), 1)
+            deliver_otp.assert_not_called()
+
+            callbacks[0]()
+
+            deliver_otp.assert_called_once()
 
     def test_social_registration_requires_phone(self):
         email_verification = self.verification_service.initiate_registration_verification(

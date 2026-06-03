@@ -4,6 +4,7 @@ from urllib.parse import urljoin
 import bcrypt
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db import transaction
 from django.utils.text import slugify
 
@@ -50,9 +51,13 @@ class SystemAdminService:
     def _clean_subdomain(subdomain: str | None) -> str | None:
         if subdomain is None:
             return None
-        clean_subdomain = slugify(subdomain)
+        clean_subdomain = subdomain.strip().rstrip('/')
         if not clean_subdomain:
             raise SystemAdminServiceError('Subdomain cannot be blank.')
+        try:
+            URLValidator(schemes=['http', 'https'])(clean_subdomain)
+        except ValidationError as exc:
+            raise SystemAdminServiceError('Subdomain must be a valid full URL.') from exc
         return clean_subdomain
 
     @staticmethod
@@ -194,7 +199,7 @@ class SystemAdminService:
         )
 
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_RESELLER_CREATED,
             actor_system_user=performed_by,
             subject=reseller,
             payload={
@@ -352,7 +357,7 @@ class SystemAdminService:
 
                 ReferralService().ensure_system_referral_codes(system)
             self._audit(
-                AuditEventType.SYSTEM_SETTINGS_CHANGED,
+                AuditEventType.SYSTEM_UPDATED,
                 actor_system_user=performed_by,
                 subject=system,
                 payload={'action': 'updated', 'updated_fields': updated},
@@ -374,7 +379,7 @@ class SystemAdminService:
         system.save(update_fields=['is_active'])
 
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_DEACTIVATED,
             actor_system_user=performed_by,
             subject=system,
             payload={'action': 'deactivated'},
@@ -395,7 +400,7 @@ class SystemAdminService:
         system.save(update_fields=['is_active'])
 
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_REACTIVATED,
             actor_system_user=performed_by,
             subject=system,
             payload={'action': 'reactivated'},
@@ -415,7 +420,7 @@ class SystemAdminService:
 
         system.available_countries.add(country)
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_COUNTRY_ADDED,
             actor_system_user=performed_by,
             subject=system,
             payload={'action': 'country_added', 'country_code': country.code},
@@ -435,7 +440,7 @@ class SystemAdminService:
 
         system.available_countries.remove(country)
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_COUNTRY_REMOVED,
             actor_system_user=performed_by,
             subject=system,
             payload={'action': 'country_removed', 'country_code': country.code},
@@ -493,7 +498,7 @@ class SystemAdminService:
         )
 
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_CLIENT_CREATED,
             actor_system_user=performed_by,
             subject=client,
             payload={
@@ -520,7 +525,7 @@ class SystemAdminService:
         client.save(update_fields=['client_secret_hash', 'updated_at'])
 
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_CLIENT_SECRET_REGENERATED,
             actor_system_user=performed_by,
             subject=client,
             payload={'action': 'client_secret_regenerated'},
@@ -593,7 +598,7 @@ class SystemAdminService:
         if updated:
             client.save(update_fields=updated)
             self._audit(
-                AuditEventType.SYSTEM_SETTINGS_CHANGED,
+                AuditEventType.SYSTEM_CLIENT_UPDATED,
                 actor_system_user=performed_by,
                 subject=client,
                 payload={'action': 'client_updated', 'updated_fields': updated},
@@ -614,7 +619,7 @@ class SystemAdminService:
         client.is_active = False
         client.save(update_fields=['is_active'])
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_CLIENT_DEACTIVATED,
             actor_system_user=performed_by,
             subject=client,
             payload={'action': 'client_deactivated'},
@@ -634,7 +639,7 @@ class SystemAdminService:
         client.is_active = True
         client.save(update_fields=['is_active'])
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_CLIENT_REACTIVATED,
             actor_system_user=performed_by,
             subject=client,
             payload={'action': 'client_reactivated'},
@@ -668,7 +673,7 @@ class SystemAdminService:
             },
         )
         self._audit(
-            AuditEventType.SYSTEM_SETTINGS_CHANGED,
+            AuditEventType.SYSTEM_SETTING_SET,
             actor_system_user=performed_by,
             subject=setting,
             payload={'system': system.name, 'key': clean_key},
@@ -701,15 +706,7 @@ class SystemAdminService:
     def _build_subdomain_url(system: System, path: str) -> str:
         if not system.subdomain:
             raise SystemAdminServiceError('System subdomain is required to build OAuth URIs.')
-
-        root_domain = getattr(settings, 'IDENTITY_PUBLIC_ROOT_DOMAIN', '').strip()
-        scheme = getattr(settings, 'IDENTITY_PUBLIC_SCHEME', 'https').strip() or 'https'
-        if not root_domain:
-            raise SystemAdminServiceError(
-                'IDENTITY_PUBLIC_ROOT_DOMAIN is required to build OAuth URIs.'
-            )
-        host = f'{system.subdomain}.{root_domain}'
-        return urljoin(f'{scheme}://{host}/', path.lstrip('/'))
+        return urljoin(f'{system.subdomain.rstrip("/")}/', path.lstrip('/'))
 
     @staticmethod
     def _sync_settings(*, parent_system: System, reseller: System) -> None:

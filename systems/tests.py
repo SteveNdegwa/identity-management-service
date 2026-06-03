@@ -9,8 +9,6 @@ from systems.services.system_admin_service import SystemAdminService
 
 
 @override_settings(
-    IDENTITY_PUBLIC_SCHEME='https',
-    IDENTITY_PUBLIC_ROOT_DOMAIN='identity.example.com',
     IDENTITY_DEFAULT_REDIRECT_PATHS=['/auth/callback'],
     IDENTITY_DEFAULT_LOGOUT_PATHS=['/auth/logout'],
 )
@@ -22,7 +20,7 @@ class SystemResellerProvisioningTests(TestCase):
             realm=self.realm,
             name='Radicrunch',
             slug='radicrunch',
-            subdomain='radicrunch',
+            subdomain='https://radicrunch.identity.example.com',
             logo_url='https://assets.example.com/radicrunch.png',
             favicon_url='https://assets.example.com/favicon.ico',
             primary_color='#102030',
@@ -58,7 +56,7 @@ class SystemResellerProvisioningTests(TestCase):
         reseller, client, raw_secret = SystemAdminService().create_reseller(
             parent_system=self.parent_system,
             name='Whitelisted Partner',
-            subdomain='partner',
+            subdomain='https://partner.identity.example.com',
             tagline='Partner identity',
         )
 
@@ -82,7 +80,7 @@ class SystemResellerProvisioningTests(TestCase):
         reseller, _, _ = SystemAdminService().create_reseller(
             parent_system=self.parent_system,
             name='Config Partner',
-            subdomain='config-partner',
+            subdomain='https://config-partner.identity.example.com',
         )
 
         self.assertTrue(reseller.settings.filter(key='payments.provider', value='stripe').exists())
