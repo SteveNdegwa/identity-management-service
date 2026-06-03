@@ -1,3 +1,5 @@
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
@@ -19,6 +21,17 @@ class OrganizationServiceError(Exception):
 
 
 class OrganizationService:
+    @staticmethod
+    def _clean_subdomain(subdomain: str) -> str | None:
+        clean_subdomain = subdomain.strip().rstrip('/')
+        if not clean_subdomain:
+            return None
+        try:
+            URLValidator(schemes=['http', 'https'])(clean_subdomain)
+        except ValidationError as exc:
+            raise OrganizationServiceError('Subdomain must be a valid full URL.') from exc
+        return clean_subdomain
+
     @transaction.atomic
     def update_organization(
         self,
@@ -66,7 +79,7 @@ class OrganizationService:
             updated.append('website')
 
         if subdomain is not None:
-            organization.subdomain = slugify(subdomain) or None
+            organization.subdomain = self._clean_subdomain(subdomain)
             updated.append('subdomain')
 
         if primary_color is not None:

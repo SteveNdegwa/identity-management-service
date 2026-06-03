@@ -16,7 +16,7 @@ class Organization(BaseModel):
     logo_url = models.URLField(blank=True)
     favicon_url = models.URLField(blank=True)
     website = models.URLField(blank=True)
-    subdomain = models.SlugField(max_length=80, unique=True, null=True, blank=True)
+    subdomain = models.URLField(unique=True, null=True, blank=True)
     primary_color = models.CharField(max_length=20, blank=True)
     secondary_color = models.CharField(max_length=20, blank=True)
     accent_colors = models.JSONField(default=list, blank=True)
