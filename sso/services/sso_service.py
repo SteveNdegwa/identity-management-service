@@ -16,6 +16,7 @@ from django.utils import timezone
 from accounts.identifier_utils import IdentifierNormaliser, detect_identifier_type
 from accounts.models import IdentifierType, SocialAccount, SystemUser, SystemUserStatus, User
 from audit.models import AuditEventType, AuditLog
+from base.models import Realm
 from notifications.services.notification_service import NotificationService
 from organizations.models import OrganizationSettings
 from permissions.services.permission_resolver import PermissionResolverService, ResolvedContext
@@ -287,7 +288,7 @@ class SSOService:
 
         self._rate_limit_passwordless(login_value, ip_address)
 
-        user, contact_type = self._resolve_user_and_contact_silent(login_value)
+        user, contact_type = self._resolve_user_and_contact_silent(client.system.realm, login_value)
         masked = mask(login_value)
 
         if user is None or contact_type is None or user.is_locked():
@@ -394,7 +395,7 @@ class SSOService:
             raise AuthenticationError('Magic link login is not enabled for this system.')
 
         self._rate_limit_magic_link(email, ip_address)
-        user, contact_type = self._resolve_user_and_contact_silent(email, IdentifierType.EMAIL)
+        user, contact_type = self._resolve_user_and_contact_silent(client.system.realm, email, IdentifierType.EMAIL)
         masked = mask(email)
 
         if not user or contact_type != IdentifierType.EMAIL or not user.email_verified:
@@ -1614,12 +1615,14 @@ class SSOService:
 
     @staticmethod
     def _resolve_user_and_contact_silent(
-        value: str, identifier_type: str | None = None
+            realm: Realm,
+            value: str,
+            identifier_type: str | None = None
     ) -> tuple[User | None, str | None]:
         # noinspection PyBroadException
         try:
             detected = identifier_type or detect_identifier_type(value)
-            user = User.objects.get_by_identifier(None, value, detected)
+            user = User.objects.get_by_identifier(realm, value, detected)
             return user, detected
         except Exception:
             return None, None
