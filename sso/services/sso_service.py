@@ -395,7 +395,9 @@ class SSOService:
             raise AuthenticationError('Magic link login is not enabled for this system.')
 
         self._rate_limit_magic_link(email, ip_address)
-        user, contact_type = self._resolve_user_and_contact_silent(client.system.realm, email, IdentifierType.EMAIL)
+        user, contact_type = self._resolve_user_and_contact_silent(
+            client.system.realm, email, IdentifierType.EMAIL
+        )
         masked = mask(email)
 
         if not user or contact_type != IdentifierType.EMAIL or not user.email_verified:
@@ -1615,9 +1617,7 @@ class SSOService:
 
     @staticmethod
     def _resolve_user_and_contact_silent(
-            realm: Realm,
-            value: str,
-            identifier_type: str | None = None
+        realm: Realm, value: str, identifier_type: str | None = None
     ) -> tuple[User | None, str | None]:
         # noinspection PyBroadException
         try:
