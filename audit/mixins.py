@@ -4,6 +4,9 @@ from audit.services.request_context import RequestContext
 
 
 class AuditableMixin:
+    def _get_audit_field_value(self, field):
+        return field.value_from_object(self)
+
     def _is_tracking_enabled(self, action: str) -> bool:
         from audit.models import ModelAuditConfiguration, ModelAuditEventType
 
@@ -35,7 +38,7 @@ class AuditableMixin:
             try:
                 original = self.__class__.objects.get(pk=self.pk)
                 for field in self._meta.fields:
-                    original_values[field.name] = getattr(original, field.name, None)
+                    original_values[field.name] = field.value_from_object(original)
             except self.__class__.DoesNotExist:
                 is_new = True
 
@@ -53,7 +56,7 @@ class AuditableMixin:
                 if field.name in self._excluded_audit_fields():
                     continue
                 old_value = original_values.get(field.name)
-                new_value = getattr(self, field.name, None)
+                new_value = self._get_audit_field_value(field)
                 if old_value != new_value:
                     changes[field.name] = {
                         'old_value': old_value,
@@ -87,7 +90,7 @@ class AuditableMixin:
 
         # Snapshot before delete
         deleted_data = {
-            field.name: getattr(self, field.name, None)
+            field.name: self._get_audit_field_value(field)
             for field in self._meta.fields
             if field.name not in self._excluded_audit_fields()
         }

@@ -2,7 +2,8 @@ import uuid
 
 from django.test import TestCase
 
-from audit.models import ModelAuditConfiguration, ModelAuditLog
+from accounts.models import User
+from audit.models import ModelAuditConfiguration, ModelAuditEventType, ModelAuditLog
 from audit.services.request_context import RequestContext
 from base.models import Realm
 
@@ -31,3 +32,21 @@ class AuditableMixinTests(TestCase):
         self.assertEqual(audit_log.user_id, user_id)
         self.assertEqual(audit_log.request_method, 'POST')
         self.assertEqual(audit_log.request_path, '/api/accounts/register/')
+
+    def test_delete_audit_log_serializes_foreign_key_values(self):
+        ModelAuditConfiguration.objects.create(app_label='accounts', model_name='user')
+        realm = Realm.objects.create(name='Delete Realm')
+        user = User.objects.create_user(
+            realm=realm,
+            email='delete@example.com',
+            phone_number='+254700000001',
+        )
+
+        user.delete()
+
+        audit_log = ModelAuditLog.objects.get(
+            object_id=str(user.id),
+            event_type=ModelAuditEventType.DELETE,
+        )
+        deleted_data = audit_log.metadata['deleted_object_data']
+        self.assertEqual(deleted_data['realm'], str(realm.id))
