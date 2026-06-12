@@ -53,6 +53,7 @@ class UserChangeForm(forms.ModelForm):
             'middle_name',
             'display_name',
             'date_of_birth',
+            'id_number',
             'gender',
             'profile_photo_url',
             'pin',
@@ -85,7 +86,7 @@ class UserAdmin(DjangoUserAdmin):
     list_filter = ('is_active', 'is_staff', 'email_verified', 'phone_verified', 'realm')
     autocomplete_fields = ('realm', 'primary_country')
     ordering = ('email',)
-    search_fields = ('email', 'phone_number', 'first_name', 'last_name')
+    search_fields = ('email', 'phone_number', 'id_number', 'first_name', 'last_name')
     fieldsets = (
         (
             None,
@@ -100,6 +101,7 @@ class UserAdmin(DjangoUserAdmin):
                     'middle_name',
                     'display_name',
                     'date_of_birth',
+                    'id_number',
                     'gender',
                     'profile_photo_url',
                 )

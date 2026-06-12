@@ -73,6 +73,8 @@ class AccountFlowTests(TestCase):
             email='ada@example.com',
             phone_number='+254715013269',
             password='Secret123!',
+            id_number='ID-123456',
+            profile_photo_url='https://example.com/ada.jpg',
             email_verification_id=str(email_verification.id),
             phone_verification_id=str(phone_verification.id),
             primary_country=self.country,
@@ -80,7 +82,53 @@ class AccountFlowTests(TestCase):
 
         self.assertTrue(user.email_verified)
         self.assertTrue(user.phone_verified)
+        self.assertEqual(user.id_number, 'ID-123456')
+        self.assertEqual(user.profile_photo_url, 'https://example.com/ada.jpg')
         self.assertEqual(system_user.user, user)
+
+    def test_update_profile_updates_id_number_and_preserves_when_absent(self):
+        user = User.objects.create_user(
+            realm=self.realm,
+            email='profile@example.com',
+            phone_number='+254700000010',
+            password='Secret123!',
+            id_number='OLD-123',
+        )
+        system_user = SystemUser.objects.create(
+            user=user,
+            system=self.system,
+            organization=self.organization,
+            country=self.country,
+            role=self.role,
+            status='active',
+        )
+
+        updated = self.account_service.update_profile(
+            system_user=system_user,
+            display_name='Profile User',
+        )
+        updated.user.refresh_from_db()
+
+        self.assertEqual(updated.user.display_name, 'Profile User')
+        self.assertEqual(updated.user.id_number, 'OLD-123')
+
+        updated = self.account_service.update_profile(
+            system_user=system_user,
+            id_number=' NEW-456 ',
+            date_of_birth='1991-02-03',
+        )
+        updated.user.refresh_from_db()
+
+        self.assertEqual(updated.user.id_number, 'NEW-456')
+        self.assertEqual(updated.user.date_of_birth, date(1991, 2, 3))
+
+        updated = self.account_service.update_profile(
+            system_user=system_user,
+            id_number=' ',
+        )
+        updated.user.refresh_from_db()
+
+        self.assertIsNone(updated.user.id_number)
 
     def test_identifier_verification_notification_is_sent_after_commit(self):
         with patch(

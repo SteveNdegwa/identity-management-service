@@ -5,6 +5,7 @@ import bcrypt
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from accounts.identifier_utils import IdentifierNormaliser
 from accounts.models import (
@@ -243,7 +244,9 @@ class AccountService:
         middle_name: str = '',
         display_name: str = '',
         date_of_birth=None,
+        id_number: str | None = None,
         gender: str = Gender.OTHER,
+        profile_photo_url: str = '',
         country: Country | None = None,
         email_verification_id: str | None = None,
         phone_verification_id: str | None = None,
@@ -254,6 +257,8 @@ class AccountService:
         su = self._get_claimable_system_user(lookup_id, token)
         system = su.system
         existing_user = self._find_user_by_email(su.provisioning_email, system.realm)
+        date_of_birth = self._normalise_date_of_birth(date_of_birth)
+        id_number = self._normalise_id_number(id_number)
 
         if claim_action == 'link':
             if not existing_user:
@@ -313,7 +318,9 @@ class AccountService:
                     middle_name=middle_name,
                     display_name=display_name or f'{first_name} {last_name}'.strip(),
                     date_of_birth=date_of_birth,
+                    id_number=id_number,
                     gender=gender,
+                    profile_photo_url=profile_photo_url,
                 )
 
                 self._apply_verified_contacts(user, verified)
@@ -357,7 +364,9 @@ class AccountService:
         middle_name: str = '',
         display_name: str = '',
         date_of_birth=None,
+        id_number: str | None = None,
         gender: str = Gender.OTHER,
+        profile_photo_url: str = '',
         email: str | None = None,
         phone_number: str | None = None,
         password: str | None = None,
@@ -371,6 +380,9 @@ class AccountService:
     ) -> tuple[User, SystemUser]:
         if not system.registration_open:
             raise RegistrationClosedError('This system does not allow self-registration.')
+
+        date_of_birth = self._normalise_date_of_birth(date_of_birth)
+        id_number = self._normalise_id_number(id_number)
 
         role = role or system.default_role
         if not role:
@@ -413,7 +425,9 @@ class AccountService:
             middle_name=middle_name,
             display_name=display_name or f'{first_name} {last_name}'.strip(),
             date_of_birth=date_of_birth,
+            id_number=id_number,
             gender=gender,
+            profile_photo_url=profile_photo_url,
         )
 
         self._apply_verified_contacts(user, verified)
@@ -485,7 +499,9 @@ class AccountService:
         middle_name: str = '',
         display_name: str = '',
         date_of_birth=None,
+        id_number: str | None = None,
         gender: str = Gender.OTHER,
+        profile_photo_url: str = '',
         email: str | None = None,
         phone_number: str | None = None,
         access_token: str = '',
@@ -500,6 +516,9 @@ class AccountService:
     ) -> tuple[User, SystemUser]:
         if not system.registration_open:
             raise RegistrationClosedError('This system does not allow self-registration.')
+
+        date_of_birth = self._normalise_date_of_birth(date_of_birth)
+        id_number = self._normalise_id_number(id_number)
 
         self._validate_required_profile(first_name, last_name, date_of_birth, gender)
         provider = self._validate_social_provider_for_system(system, provider)
@@ -570,7 +589,9 @@ class AccountService:
             middle_name=middle_name,
             display_name=display_name or f'{first_name} {last_name}'.strip(),
             date_of_birth=date_of_birth,
+            id_number=id_number,
             gender=gender,
+            profile_photo_url=profile_photo_url,
         )
 
         self._apply_verified_contacts(user, verified)
@@ -680,12 +701,18 @@ class AccountService:
             'middle_name',
             'display_name',
             'date_of_birth',
+            'id_number',
             'gender',
             'profile_photo_url',
         }
         updated_user = [key for key in fields if key in user_fields]
         for key in updated_user:
-            setattr(user, key, fields[key])
+            value = fields[key]
+            if key == 'date_of_birth':
+                value = self._normalise_date_of_birth(value)
+            elif key == 'id_number':
+                value = self._normalise_id_number(value)
+            setattr(user, key, value)
         if updated_user:
             user.save(update_fields=updated_user)
 
@@ -916,6 +943,28 @@ class AccountService:
 
         if updates:
             user.save(update_fields=updates)
+
+    @staticmethod
+    def _normalise_date_of_birth(date_of_birth):
+        if not isinstance(date_of_birth, str):
+            return date_of_birth
+
+        value = date_of_birth.strip()
+        if not value:
+            return None
+
+        parsed = parse_date(value)
+        if not parsed:
+            raise SelfRegistrationError('Date of birth must be in YYYY-MM-DD format.')
+        return parsed
+
+    @staticmethod
+    def _normalise_id_number(id_number: str | None) -> str | None:
+        if id_number is None:
+            return None
+
+        value = str(id_number).strip()
+        return value or None
 
     @staticmethod
     def _validate_required_profile(
