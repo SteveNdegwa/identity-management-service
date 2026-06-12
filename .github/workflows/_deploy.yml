@@ -50,6 +50,8 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           push: true
+          build-args: |
+            APT_CACHE_BUST=${{ github.run_id }}
           tags: |
             registry.gitlab.com/spin_mobile/idms:${{ steps.tag.outputs.image_tag }}
             registry.gitlab.com/spin_mobile/idms:${{ inputs.env }}-latest
