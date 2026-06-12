@@ -108,14 +108,17 @@ def _parse_datetime_query(value: str | None) -> datetime | None:
 
 
 def _profile_fields(data: dict) -> dict:
-    return {
-        'first_name': data.get('first_name', ''),
-        'last_name': data.get('last_name', ''),
-        'middle_name': data.get('middle_name', ''),
-        'display_name': data.get('display_name', ''),
-        'date_of_birth': data.get('date_of_birth'),
-        'gender': data.get('gender', ''),
-    }
+    profile_fields = (
+        'first_name',
+        'last_name',
+        'middle_name',
+        'display_name',
+        'date_of_birth',
+        'id_number',
+        'gender',
+        'profile_photo_url',
+    )
+    return {field: data[field] for field in profile_fields if field in data}
 
 
 def _social_fields(data: dict) -> dict:
@@ -184,6 +187,7 @@ def _user_payload(user: User) -> dict:
         'middle_name': user.middle_name,
         'display_name': user.display_name,
         'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else None,
+        'id_number': user.id_number,
         'gender': user.gender,
         'profile_photo_url': user.profile_photo_url,
     }
