@@ -959,12 +959,12 @@ class AccountService:
         return parsed
 
     @staticmethod
-    def _normalise_id_number(id_number: str | None) -> str | None:
+    def _normalise_id_number(id_number: str | None) -> str:
         if id_number is None:
-            return None
+            return ''
 
         value = str(id_number).strip()
-        return value or None
+        return value
 
     @staticmethod
     def _validate_required_profile(

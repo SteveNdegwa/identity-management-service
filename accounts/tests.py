@@ -128,7 +128,7 @@ class AccountFlowTests(TestCase):
         )
         updated.user.refresh_from_db()
 
-        self.assertIsNone(updated.user.id_number)
+        self.assertEqual(updated.user.id_number, '')
 
     def test_identifier_verification_notification_is_sent_after_commit(self):
         with patch(
