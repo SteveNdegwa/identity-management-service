@@ -130,6 +130,26 @@ configMaps:
                     }
                     try_files /$uri @django;
                 }
+                location /media {
+                    add_header Access-Control-Allow-Origin *;
+                    add_header Access-Control-Max-Age 3600;
+                    add_header Access-Control-Expose-Headers Content-Length;
+                    add_header Access-Control-Allow-Headers Range;
+                    if ($request_method = OPTIONS) {
+                        return 204;
+                    }
+                    try_files /$uri @django;
+                }
+                location /onboarding/documents {
+                    add_header Access-Control-Allow-Origin *;
+                    add_header Access-Control-Max-Age 3600;
+                    add_header Access-Control-Expose-Headers Content-Length;
+                    add_header Access-Control-Allow-Headers Range;
+                    if ($request_method = OPTIONS) {
+                        return 204;
+                    }
+                    try_files /media$uri @django;
+                }
                 location /nghealthz {
                     default_type application/json;
                     return 200 '{"success": true, "message": "healthy"}';

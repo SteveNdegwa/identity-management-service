@@ -1,11 +1,27 @@
+from django.db import models
 from django.contrib.contenttypes.models import ContentType
 
 from audit.services.request_context import RequestContext
 
 
 class AuditableMixin:
-    def _get_audit_field_value(self, field):
-        return field.value_from_object(self)
+    @classmethod
+    def _get_audit_field_value(cls, instance, field):
+        if field.is_relation and hasattr(field, 'attname'):
+            value = getattr(instance, field.attname, None)
+        else:
+            value = field.value_from_object(instance)
+        return cls._serialize_audit_value(value)
+
+    @classmethod
+    def _serialize_audit_value(cls, value):
+        if isinstance(value, models.Model):
+            return str(value.pk) if value.pk is not None else str(value)
+        if isinstance(value, dict):
+            return {key: cls._serialize_audit_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [cls._serialize_audit_value(item) for item in value]
+        return value
 
     def _is_tracking_enabled(self, action: str) -> bool:
         from audit.models import ModelAuditConfiguration, ModelAuditEventType
@@ -38,7 +54,7 @@ class AuditableMixin:
             try:
                 original = self.__class__.objects.get(pk=self.pk)
                 for field in self._meta.fields:
-                    original_values[field.name] = field.value_from_object(original)
+                    original_values[field.name] = self._get_audit_field_value(original, field)
             except self.__class__.DoesNotExist:
                 is_new = True
 
@@ -56,7 +72,7 @@ class AuditableMixin:
                 if field.name in self._excluded_audit_fields():
                     continue
                 old_value = original_values.get(field.name)
-                new_value = self._get_audit_field_value(field)
+                new_value = self._get_audit_field_value(self, field)
                 if old_value != new_value:
                     changes[field.name] = {
                         'old_value': old_value,
@@ -90,7 +106,7 @@ class AuditableMixin:
 
         # Snapshot before delete
         deleted_data = {
-            field.name: self._get_audit_field_value(field)
+            field.name: self._get_audit_field_value(self, field)
             for field in self._meta.fields
             if field.name not in self._excluded_audit_fields()
         }

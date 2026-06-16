@@ -168,6 +168,8 @@ APP_PATH = os.environ.get('APP_PATH') or '/var/www/idms'
 STATIC_URL = '/static/'
 STATIC_ROOT = APP_PATH + '/static'
 STATICFILES_DIRS = []
+MEDIA_URL = '/media/'
+MEDIA_ROOT = APP_PATH + '/media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
