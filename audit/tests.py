@@ -44,11 +44,12 @@ class AuditableMixinTests(TestCase):
             email='delete@example.com',
             phone_number='+254700000001',
         )
+        deleted_user_id = user.id
 
         user.delete()
 
         audit_log = ModelAuditLog.objects.get(
-            object_id=str(user.id),
+            object_id=str(deleted_user_id),
             event_type=ModelAuditEventType.DELETE,
         )
         deleted_data = audit_log.metadata['deleted_object_data']

@@ -38,7 +38,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /usr/src/app
 
+ARG APT_CACHE_BUST=manual
+
 RUN apt-get update \
+    && echo "APT cache bust: ${APT_CACHE_BUST}" \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 

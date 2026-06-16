@@ -140,6 +140,7 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
     middle_name = models.CharField(max_length=120, blank=True)
     display_name = models.CharField(max_length=255, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
+    id_number = models.CharField(max_length=120, blank=True, default='')
     gender = models.CharField(max_length=20, choices=Gender.choices, blank=True)
     profile_photo_url = models.URLField(blank=True)
 
@@ -174,6 +175,7 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel, SoftDeleteModel):
     def save(self, *args, **kwargs) -> None:
         self.email = self.email.strip().lower()
         self.phone_number = self.phone_number.strip()
+        self.id_number = '' if self.id_number is None else str(self.id_number).strip()
         if not self._state.adding:
             old = User.all_objects.get(pk=self.pk)
             if old.realm_id and self.realm_id and old.realm_id != self.realm_id:

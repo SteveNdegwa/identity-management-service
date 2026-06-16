@@ -30,6 +30,7 @@ class RequestContext:
         'exception_traceback': None,
         'request_method': None,
         'request_path': None,
+        'activity_name': None,
         'is_secure': False,
         'started_at': None,
     }
