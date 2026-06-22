@@ -90,7 +90,7 @@ class Role(BaseModel):
         ]
 
     def __str__(self):
-        country_str = f'/{self.country.code}' if self.country_id else ''
+        country_str = f'/{self.country.code}' if self.country else ''
         return f'{self.system.slug}{country_str}:{self.name}'
 
     def get_all_permission_ids(self, _visited: set = None) -> set:

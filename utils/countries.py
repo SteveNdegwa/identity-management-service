@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 
 def _country_lookup(value: str):
@@ -11,18 +11,13 @@ def _country_lookup(value: str):
         return None
 
     try:
-        return Country.objects.get(id=clean_value)
-    except (Country.DoesNotExist, ValidationError, ValueError) as _exc:
-        pass
-
-    try:
-        return Country.objects.get(code__iexact=clean_value)
+        return Country.objects.get(Q(code__iexact=clean_value) | Q(code3__iexact=clean_value))
     except Country.DoesNotExist:
         return None
 
 
 def country_value_from_data(data: dict) -> str | None:
-    return data.get('country_id') or data.get('country_code') or data.get('country')
+    return data.get('country_code') or data.get('country')
 
 
 def has_country_value(data: dict) -> bool:

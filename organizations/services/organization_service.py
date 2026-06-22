@@ -280,7 +280,7 @@ class OrganizationService:
         if parent:
             if parent.organization_id != organization.id:
                 raise OrganizationServiceError('Parent branch belongs to a different organization.')
-            if parent.country_id != country.id:
+            if parent.country.code != country.code:
                 raise OrganizationServiceError('Parent branch is in a different country.')
 
         branch = Branch.objects.create(
@@ -348,7 +348,7 @@ class OrganizationService:
                 raise OrganizationServiceError('A branch cannot be its own parent.')
             if parent.organization_id != branch.organization_id:
                 raise OrganizationServiceError('Parent branch belongs to a different organization.')
-            if parent.country_id != branch.country_id:
+            if parent.country.code != branch.country.code:
                 raise OrganizationServiceError('Parent branch is in a different country.')
             if self._is_descendant(branch, parent):
                 raise OrganizationServiceError(

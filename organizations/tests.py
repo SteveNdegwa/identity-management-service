@@ -113,8 +113,8 @@ class OnboardingServiceTests(TestCase):
 
         self.assertEqual(OrganizationOnboarding.objects.count(), 1)
         self.assertEqual(
-            set(onboarding.country_requests.values_list('country_id', flat=True)),
-            {self.country_ke.id, self.country_ug.id},
+            set(onboarding.country_requests.values_list('country__code', flat=True)),
+            {self.country_ke.code, self.country_ug.code},
         )
         self.assertEqual(onboarding.organization_type, 'microfinance_bank')
         self.assertEqual(onboarding.products_needed, ['statement_analysis', 'kyc_kyb_checks'])

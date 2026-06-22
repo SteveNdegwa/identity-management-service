@@ -148,6 +148,7 @@ def _org_country_payload(oc: OrganizationCountry) -> dict:
     return {
         'id': str(oc.id),
         'country_code': oc.country.code,
+        'country_code3': oc.country.code3,
         'country_name': oc.country.name,
         'registration_number': oc.registration_number,
         'tax_id': oc.tax_id,
@@ -165,7 +166,8 @@ def _branch_payload(branch: Branch) -> dict:
         'id': str(branch.id),
         'name': branch.name,
         'code': branch.code,
-        'country': branch.country.code,
+        'country_code': branch.country.code,
+        'country_code3': branch.country.code3,
         'parent_id': str(branch.parent_id) if branch.parent_id else None,
         'is_active': branch.is_active,
         'metadata': branch.metadata,
@@ -251,8 +253,8 @@ def _onboarding_payload(onboarding: OrganizationOnboarding) -> dict:
 def _onboarding_country_payload(country_request: OrganizationOnboardingCountry) -> dict:
     return {
         'country_request_id': str(country_request.id),
-        'country_id': str(country_request.country_id),
         'country_code': country_request.country.code,
+        'country_code3': country_request.country.code3,
         'country_name': country_request.country.name,
         'registration_number': country_request.registration_number,
         'tax_id': country_request.tax_id,
@@ -645,8 +647,11 @@ def branch_list_view(request: ExtendedRequest, organization_id: str) -> JsonResp
             .order_by('country__code', 'name')
         )
 
-        if country_id := request.GET.get('country_id'):
-            qs = qs.filter(country_id=country_id)
+        if country_code := request.GET.get('country_code') or request.GET.get('country'):
+            qs = qs.filter(
+                models.Q(country__code__iexact=country_code)
+                | models.Q(country__code3__iexact=country_code)
+            )
         if is_active := request.GET.get('is_active'):
             qs = qs.filter(is_active=is_active.lower() == 'true')
         if parent_id := request.GET.get('parent_id'):
@@ -688,7 +693,7 @@ def branch_create_view(request: ExtendedRequest, organization_id: str) -> JsonRe
         country = _get_country(data)
         if not country:
             return ResponseProvider.bad_request(
-                error='invalid_country', message='country_id is required.'
+                error='invalid_country', message='country_code is required.'
             )
 
         parent = None
@@ -894,8 +899,8 @@ def onboarding_create_view(request: ExtendedRequest) -> JsonResponse:
                 return ResponseProvider.bad_request(
                     error='invalid_country', message='Each country must be an object.'
                 )
-            country_code = country_data.get('country_code')
-            country = Country.objects.filter(code__iexact=str(country_code or '').strip()).first()
+            country = get_country_from_data(country_data)
+            country_code = country_data.get('country_code') or country_data.get('country')
             if not country:
                 return ResponseProvider.bad_request(
                     error='invalid_country', message=f"Country not found for code '{country_code}'."

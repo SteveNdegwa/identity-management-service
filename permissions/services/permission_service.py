@@ -227,7 +227,8 @@ class PermissionService:
             subject=role,
             payload={
                 'permissions': permission_codenames,
-                'country': country.code if country else None,
+                'country_code': country.code if country else None,
+                'country_code3': country.code3 if country else None,
             },
         )
         return role

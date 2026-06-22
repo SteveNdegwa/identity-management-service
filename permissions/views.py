@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 
+from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -19,6 +20,7 @@ from permissions.services.permission_service import (
     PermissionServiceError,
 )
 from systems.models import System
+from utils.countries import get_country_from_data, has_country_value
 from utils.decorators import user_login_required
 from utils.extended_request import ExtendedRequest
 from utils.response_provider import ResponseProvider
@@ -35,13 +37,7 @@ def _get_system(system_id: str) -> System | None:
 
 
 def _get_country(data: dict) -> Country | None:
-    country_id = data.get('country_id') or data.get('country')
-    if not country_id:
-        return None
-    try:
-        return Country.objects.get(id=country_id)
-    except Country.DoesNotExist:
-        return None
+    return get_country_from_data(data)
 
 
 def _get_organization(data: dict) -> Organization | None:
@@ -164,8 +160,8 @@ def _role_payload(role: Role) -> dict:
     return {
         'id': str(role.id),
         'system_id': str(role.system_id),
-        'country_id': str(role.country_id) if role.country_id else None,
-        'country_code': role.country.code if role.country_id else None,
+        'country_code': role.country.code if role.country else None,
+        'country_code3': role.country.code3 if role.country else None,
         'name': role.name,
         'slug': role.slug,
         'description': role.description,
@@ -408,8 +404,10 @@ def role_list_view(request: ExtendedRequest, system_id: str) -> JsonResponse:
             .order_by('name')
         )
 
-        if country_id := request.GET.get('country_id'):
-            qs = qs.filter(country_id=country_id)
+        if country_code := request.GET.get('country_code') or request.GET.get('country'):
+            qs = qs.filter(
+                Q(country__code__iexact=country_code) | Q(country__code3__iexact=country_code)
+            )
         if is_active := request.GET.get('is_active'):
             qs = qs.filter(is_active=is_active.lower() == 'true')
         if is_system_defined := request.GET.get('is_system_defined'):
@@ -443,8 +441,8 @@ def role_create_view(request: ExtendedRequest, system_id: str) -> JsonResponse:
 
     try:
         data = request.data
-        country = _get_country(data) if data.get('country_id') or data.get('country') else None
-        if (data.get('country_id') or data.get('country')) and not country:
+        country = _get_country(data) if has_country_value(data) else None
+        if has_country_value(data) and not country:
             return ResponseProvider.bad_request(
                 error='invalid_country', message='Country not found.'
             )

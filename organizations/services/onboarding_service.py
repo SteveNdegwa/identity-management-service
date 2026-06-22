@@ -95,12 +95,12 @@ class OnboardingService:
         if organization and organization.system_id != system.id:
             raise OnboardingError('Selected organization does not belong to this system.')
 
-        seen_country_ids = set()
+        seen_country_codes = set()
         for country_data in countries:
             country = country_data['country']
-            if country.id in seen_country_ids:
+            if country.code in seen_country_codes:
                 raise OnboardingError('Duplicate countries are not allowed.')
-            seen_country_ids.add(country.id)
+            seen_country_codes.add(country.code)
             self._assert_country_can_onboard(
                 system=system,
                 country=country,
@@ -164,7 +164,7 @@ class OnboardingService:
 
         country_fields = {
             'country',
-            'country_id',
+            'country_code',
             'countries',
             'registration_number',
             'tax_id',
@@ -290,7 +290,7 @@ class OnboardingService:
             raise OnboardingError(f"Application cannot be edited in status '{onboarding.status}'.")
 
         updated = []
-        if country and country.id != country_request.country_id:
+        if country and country.code != country_request.country.code:
             if (
                 onboarding.country_requests.exclude(id=country_request.id)
                 .filter(country=country)

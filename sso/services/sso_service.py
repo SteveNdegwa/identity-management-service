@@ -1494,7 +1494,8 @@ class SSOService:
             'scope': ' '.join(scopes),
             'system_user_id': str(system_user.id),
             'system_id': str(system_user.system.id),
-            'country': system_user.country.code if system_user.country else '',
+            'country_code': system_user.country.code if system_user.country else '',
+            'country_code3': system_user.country.code3 if system_user.country else '',
             'role': perm_ctx.role if perm_ctx else '',
             'permissions': list(perm_ctx.permissions) if perm_ctx else [],
             'branches': perm_ctx.accessible_branch_ids if perm_ctx else [],
@@ -1524,7 +1525,8 @@ class SSOService:
             'iat': int(now.timestamp()),
             'exp': int((now + timedelta(seconds=3600)).timestamp()),
             'jti': str(uuid.uuid4()),
-            'country': system_user.country.code,
+            'country_code': system_user.country.code,
+            'country_code3': system_user.country.code3,
         }
         if 'email' in scopes:
             claims['email'] = system_user.user.get_email() or ''

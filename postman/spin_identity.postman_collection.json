@@ -35,8 +35,8 @@
       "value": "replace-role-id"
     },
     {
-      "key": "countryId",
-      "value": "replace-country-id"
+      "key": "countryCode",
+      "value": "KE"
     },
     {
       "key": "organizationId",
@@ -202,7 +202,7 @@
             "url": "{{baseUrl}}/api/accounts/register/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"middle_name\": \"\",\n  \"display_name\": \"Ada Lovelace\",\n  \"date_of_birth\": \"1990-01-01\",\n  \"id_number\": \"ID-123456\",\n  \"gender\": \"female\",\n  \"profile_photo_url\": \"https://example.com/avatar.jpg\",\n  \"email\": \"ada@example.com\",\n  \"phone_number\": \"+254700000000\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"referral_code\": \"\",\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  }\n}"
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_code\": \"{{countryCode}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"middle_name\": \"\",\n  \"display_name\": \"Ada Lovelace\",\n  \"date_of_birth\": \"1990-01-01\",\n  \"id_number\": \"ID-123456\",\n  \"gender\": \"female\",\n  \"profile_photo_url\": \"https://example.com/avatar.jpg\",\n  \"email\": \"ada@example.com\",\n  \"phone_number\": \"+254700000000\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"referral_code\": \"\",\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  }\n}"
             }
           },
           "event": [
@@ -233,7 +233,7 @@
             "url": "{{baseUrl}}/api/accounts/register/link/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"existing_user_id\": \"replace-existing-user-id\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"referral_code\": \"\"\n}"
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"existing_user_id\": \"replace-existing-user-id\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_code\": \"{{countryCode}}\",\n  \"referral_code\": \"\"\n}"
             }
           },
           "event": [
@@ -264,7 +264,7 @@
             "url": "{{baseUrl}}/api/accounts/register/social/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"display_name\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"phone_number\": \"+254700000000\",\n  \"provider\": \"google\",\n  \"provider_user_id\": \"google-oauth-subject-123\",\n  \"access_token\": \"provider-access-token\",\n  \"refresh_token\": \"\",\n  \"extra_data\": {\n    \"avatar_url\": \"https://example.com/avatar.jpg\"\n  },\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  }\n}"
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_code\": \"{{countryCode}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"display_name\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"phone_number\": \"+254700000000\",\n  \"provider\": \"google\",\n  \"provider_user_id\": \"google-oauth-subject-123\",\n  \"access_token\": \"provider-access-token\",\n  \"refresh_token\": \"\",\n  \"extra_data\": {\n    \"avatar_url\": \"https://example.com/avatar.jpg\"\n  },\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  }\n}"
             }
           },
           "event": [
@@ -295,7 +295,7 @@
             "url": "{{baseUrl}}/api/accounts/register/social/link/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"existing_user_id\": \"replace-existing-user-id\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"provider\": \"google\",\n  \"provider_user_id\": \"google-oauth-subject-123\",\n  \"access_token\": \"provider-access-token\"\n}"
+              "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"existing_user_id\": \"replace-existing-user-id\",\n  \"system_id\": \"{{systemId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"country_code\": \"{{countryCode}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"provider\": \"google\",\n  \"provider_user_id\": \"google-oauth-subject-123\",\n  \"access_token\": \"provider-access-token\"\n}"
             }
           },
           "event": [
@@ -334,7 +334,7 @@
             "url": "{{baseUrl}}/api/accounts/claim/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"lookup_id\": \"{{lookupId}}\",\n  \"token\": \"{{claimToken}}\",\n  \"claim_action\": \"link\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"phone_number\": \"+254700000000\",\n  \"country_id\": \"{{countryId}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  },\n  \"update_email\": false,\n  \"confirm_link_existing_user\": false\n}"
+              "raw": "{\n  \"lookup_id\": \"{{lookupId}}\",\n  \"token\": \"{{claimToken}}\",\n  \"claim_action\": \"link\",\n  \"password\": \"StrongPassword123!\",\n  \"pin\": \"1234\",\n  \"phone_number\": \"+254700000000\",\n  \"country_code\": \"{{countryCode}}\",\n  \"first_name\": \"Ada\",\n  \"last_name\": \"Lovelace\",\n  \"verification_ids\": {\n    \"email\": \"{{emailVerificationId}}\",\n    \"phone\": \"{{phoneVerificationId}}\"\n  },\n  \"update_email\": false,\n  \"confirm_link_existing_user\": false\n}"
             }
           }
         },
@@ -538,7 +538,7 @@
             "url": "{{baseUrl}}/api/accounts/system-users/provision/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"country_id\": \"{{countryId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"all_branches\": true,\n  \"provisioning_email\": \"new.user@example.com\",\n  \"external_ref\": \"ext-234\",\n  \"metadata\": {}\n}"
+              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"country_code\": \"{{countryCode}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"organization_id\": \"{{organizationId}}\",\n  \"all_branches\": true,\n  \"provisioning_email\": \"new.user@example.com\",\n  \"external_ref\": \"ext-234\",\n  \"metadata\": {}\n}"
             }
           }
         },
@@ -1221,7 +1221,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"country_id\": \"{{countryId}}\",\n  \"registration_number\": \"REG-001\",\n  \"tax_id\": \"TAX-001\"\n}"
+              "raw": "{\n  \"country_code\": \"{{countryCode}}\",\n  \"registration_number\": \"REG-001\",\n  \"tax_id\": \"TAX-001\"\n}"
             },
             "url": "{{baseUrl}}/api/organizations/{{organizationId}}/countries/add/"
           }
@@ -1270,7 +1270,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{baseUrl}}/api/organizations/{{organizationId}}/branches/?country_id={{countryId}}&is_active=true&root_only=false"
+            "url": "{{baseUrl}}/api/organizations/{{organizationId}}/branches/?country_code={{countryCode}}&is_active=true&root_only=false"
           }
         },
         {
@@ -1289,7 +1289,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"country_id\": \"{{countryId}}\",\n  \"name\": \"Nairobi HQ\",\n  \"code\": \"NBI-HQ\",\n  \"parent_id\": \"\",\n  \"metadata\": {}\n}"
+              "raw": "{\n  \"country_code\": \"{{countryCode}}\",\n  \"name\": \"Nairobi HQ\",\n  \"code\": \"NBI-HQ\",\n  \"parent_id\": \"\",\n  \"metadata\": {}\n}"
             },
             "url": "{{baseUrl}}/api/organizations/{{organizationId}}/branches/create/"
           }
@@ -1417,7 +1417,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"organization_id\": \"\",\n  \"legal_name\": \"Spin Identity Kenya Ltd\",\n  \"trading_name\": \"Spin Identity\",\n  \"organization_type\": \"microfinance\",\n  \"products_needed\": [\n    \"statement_analysis\",\n    \"kyc_kyb_checks\"\n  ],\n  \"monthly_transaction_volume\": \"2501_to_5000\",\n  \"staff_size\": \"21_to_50\",\n  \"pain_points\": [\n    \"manual_analysis\",\n    \"fraud\"\n  ],\n  \"countries\": [\n    {\n      \"country_id\": \"{{countryId}}\",\n      \"registration_number\": \"C.12345\",\n      \"tax_id\": \"P051234567A\",\n      \"address\": \"Nairobi, Kenya\",\n      \"metadata\": {\n        \"source\": \"postman\"\n      }\n    }\n  ],\n  \"contact_email\": \"ops@example.com\",\n  \"contact_phone\": \"+254700000002\",\n  \"website\": \"https://example.com\",\n  \"description\": \"Organization onboarding request\",\n  \"metadata\": {\n    \"source\": \"postman\"\n  }\n}"
+              "raw": "{\n  \"system_id\": \"{{systemId}}\",\n  \"organization_id\": \"\",\n  \"legal_name\": \"Spin Identity Kenya Ltd\",\n  \"trading_name\": \"Spin Identity\",\n  \"organization_type\": \"microfinance\",\n  \"products_needed\": [\n    \"statement_analysis\",\n    \"kyc_kyb_checks\"\n  ],\n  \"monthly_transaction_volume\": \"2501_to_5000\",\n  \"staff_size\": \"21_to_50\",\n  \"pain_points\": [\n    \"manual_analysis\",\n    \"fraud\"\n  ],\n  \"countries\": [\n    {\n      \"country_code\": \"{{countryCode}}\",\n      \"registration_number\": \"C.12345\",\n      \"tax_id\": \"P051234567A\",\n      \"address\": \"Nairobi, Kenya\",\n      \"metadata\": {\n        \"source\": \"postman\"\n      }\n    }\n  ],\n  \"contact_email\": \"ops@example.com\",\n  \"contact_phone\": \"+254700000002\",\n  \"website\": \"https://example.com\",\n  \"description\": \"Organization onboarding request\",\n  \"metadata\": {\n    \"source\": \"postman\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/organizations/onboarding/"
           }
@@ -1660,7 +1660,7 @@
             "url": "{{baseUrl}}/api/organizations/onboarding/{{onboardingId}}/countries/add/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"country_id\": \"{{countryId}}\",\n  \"registration_number\": \"REG-002\",\n  \"tax_id\": \"TAX-002\",\n  \"address\": \"Mombasa, Kenya\",\n  \"metadata\": {}\n}"
+              "raw": "{\n  \"country_code\": \"{{countryCode}}\",\n  \"registration_number\": \"REG-002\",\n  \"tax_id\": \"TAX-002\",\n  \"address\": \"Mombasa, Kenya\",\n  \"metadata\": {}\n}"
             }
           }
         },
@@ -1746,7 +1746,7 @@
             "url": "{{baseUrl}}/api/systems/create/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"realm_id\": \"{{realmId}}\",\n  \"name\": \"Demo System\",\n  \"slug\": \"demo-system\",\n  \"description\": \"Demo system\",\n  \"logo_url\": \"\",\n  \"website\": \"https://example.com\",\n  \"password_type\": \"password\",\n  \"allow_password_login\": true,\n  \"allow_passwordless_login\": true,\n  \"allow_magic_link_login\": true,\n  \"allow_social_login\": true,\n  \"allowed_social_providers\": [\n    \"google\"\n  ],\n  \"passwordless_only\": false,\n  \"registration_open\": true,\n  \"auto_login_after_registration\": true,\n  \"requires_approval\": false,\n  \"allows_referrals\": true,\n  \"referral_reward_amount\": \"100.00\",\n  \"auto_verify_referrals\": false,\n  \"mfa_required\": false,\n  \"mfa_required_enforced\": false,\n  \"allowed_mfa_methods\": [],\n  \"refresh_token_timeout_minutes\": null,\n  \"mfa_reauth_window_minutes\": 0,\n  \"country_ids\": [\n    \"{{countryId}}\"\n  ]\n}"
+              "raw": "{\n  \"realm_id\": \"{{realmId}}\",\n  \"name\": \"Demo System\",\n  \"slug\": \"demo-system\",\n  \"description\": \"Demo system\",\n  \"logo_url\": \"\",\n  \"website\": \"https://example.com\",\n  \"password_type\": \"password\",\n  \"allow_password_login\": true,\n  \"allow_passwordless_login\": true,\n  \"allow_magic_link_login\": true,\n  \"allow_social_login\": true,\n  \"allowed_social_providers\": [\n    \"google\"\n  ],\n  \"passwordless_only\": false,\n  \"registration_open\": true,\n  \"auto_login_after_registration\": true,\n  \"requires_approval\": false,\n  \"allows_referrals\": true,\n  \"referral_reward_amount\": \"100.00\",\n  \"auto_verify_referrals\": false,\n  \"mfa_required\": false,\n  \"mfa_required_enforced\": false,\n  \"allowed_mfa_methods\": [],\n  \"refresh_token_timeout_minutes\": null,\n  \"mfa_reauth_window_minutes\": 0,\n  \"country_codes\": [\n    \"{{countryCode}}\"\n  ]\n}"
             }
           }
         },
@@ -1840,7 +1840,7 @@
             "url": "{{baseUrl}}/api/systems/{{systemId}}/countries/add/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"country_id\": \"{{countryId}}\"\n}"
+              "raw": "{\n  \"country_code\": \"{{countryCode}}\"\n}"
             }
           }
         },
@@ -1861,7 +1861,7 @@
             "url": "{{baseUrl}}/api/systems/{{systemId}}/countries/remove/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"country_id\": \"{{countryId}}\"\n}"
+              "raw": "{\n  \"country_code\": \"{{countryCode}}\"\n}"
             }
           }
         },
@@ -2177,7 +2177,7 @@
             "url": "{{baseUrl}}/api/permissions/systems/{{systemId}}/roles/create/",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"country_id\": \"{{countryId}}\",\n  \"name\": \"Admin\",\n  \"slug\": \"admin\",\n  \"description\": \"System administrator\",\n  \"parent_role_id\": \"\",\n  \"mfa_required\": false,\n  \"mfa_allowed_methods\": [],\n  \"mfa_reauth_window_minutes\": 0,\n  \"permission_codenames\": [\n    \"accounts.view\"\n  ]\n}"
+              "raw": "{\n  \"country_code\": \"{{countryCode}}\",\n  \"name\": \"Admin\",\n  \"slug\": \"admin\",\n  \"description\": \"System administrator\",\n  \"parent_role_id\": \"\",\n  \"mfa_required\": false,\n  \"mfa_allowed_methods\": [],\n  \"mfa_reauth_window_minutes\": 0,\n  \"permission_codenames\": [\n    \"accounts.view\"\n  ]\n}"
             }
           }
         },

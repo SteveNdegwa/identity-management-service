@@ -96,8 +96,8 @@ def _system_payload(system: System) -> dict:
         'is_active': system.is_active,
         'available_countries': [
             {
-                'id': str(country.id),
                 'code': country.code,
+                'code3': country.code3,
                 'name': country.name,
             }
             for country in system.available_countries.all().order_by('name')
@@ -200,9 +200,7 @@ def system_create_view(request: ExtendedRequest) -> JsonResponse:
                 message='realm_id is required.',
             )
 
-        country_values = (
-            data.get('country_ids') or data.get('country_codes') or data.get('countries') or []
-        )
+        country_values = data.get('country_codes') or data.get('countries') or []
         countries = get_countries_from_values(country_values)
         if country_values and len(countries) != len(country_values):
             return ResponseProvider.bad_request(
@@ -267,9 +265,7 @@ def reseller_create_view(request: ExtendedRequest, system_id: str) -> JsonRespon
 
     try:
         data = request.data
-        country_values = (
-            data.get('country_ids') or data.get('country_codes') or data.get('countries') or []
-        )
+        country_values = data.get('country_codes') or data.get('countries') or []
         countries = get_countries_from_values(country_values)
         if country_values and len(countries) != len(country_values):
             return ResponseProvider.bad_request(
@@ -431,7 +427,7 @@ def system_country_list_view(request: ExtendedRequest, system_id: str) -> JsonRe
         countries = system.available_countries.all().order_by('name')
         return ResponseProvider.success(
             countries=[
-                {'id': str(country.id), 'code': country.code, 'name': country.name}
+                {'code': country.code, 'code3': country.code3, 'name': country.name}
                 for country in countries
             ]
         )
@@ -455,7 +451,7 @@ def system_country_add_view(request: ExtendedRequest, system_id: str) -> JsonRes
         if not country:
             return ResponseProvider.bad_request(
                 error='invalid_country',
-                message='country_id is required.',
+                message='country_code is required.',
             )
 
         country = system_service.add_country(
@@ -464,8 +460,8 @@ def system_country_add_view(request: ExtendedRequest, system_id: str) -> JsonRes
             performed_by=request.system_user,
         )
         return ResponseProvider.success(
-            id=str(country.id),
             code=country.code,
+            code3=country.code3,
             name=country.name,
         )
     except SystemAdminServiceError as e:
@@ -493,7 +489,7 @@ def system_country_remove_view(request: ExtendedRequest, system_id: str) -> Json
         if not country:
             return ResponseProvider.bad_request(
                 error='invalid_country',
-                message='country_id is required.',
+                message='country_code is required.',
             )
 
         country = system_service.remove_country(
@@ -502,8 +498,8 @@ def system_country_remove_view(request: ExtendedRequest, system_id: str) -> Json
             performed_by=request.system_user,
         )
         return ResponseProvider.success(
-            id=str(country.id),
             code=country.code,
+            code3=country.code3,
             name=country.name,
         )
     except SystemAdminServiceError as e:
